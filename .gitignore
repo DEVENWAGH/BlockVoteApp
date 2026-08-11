@@ -1,0 +1,48 @@
+# Gradle files
+.gradle/
+.gradle_home/
+build/
+*/build/
+
+# Android Studio / IntelliJ files
+*.iml
+.idea/workspace.xml
+.idea/libraries/
+.idea/modules.xml
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+.idea/caches/
+.idea/deploymentTargetDropDown.xml
+.idea/modules/
+.idea/kotlinc.xml
+.idea/vcs.xml
+.idea/misc.xml
+.idea/compiler.xml
+.idea/gradle.xml
+.idea/jarRepositories.xml
+.idea/runConfigurations/
+capture/
+
+# Local configuration file (sdk path, etc)
+local.properties
+.android_home/
+
+# Log files
+*.log
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Output files
+*.apk
+*.aab
+
+# Built-in agent directory
+.agent/
+.artifacts/
