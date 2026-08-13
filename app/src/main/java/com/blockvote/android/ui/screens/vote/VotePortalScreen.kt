@@ -1,6 +1,7 @@
 package com.blockvote.android.ui.screens.vote
 
 import android.Manifest
+import com.blockvote.android.data.remote.AssetUrlResolver
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -53,8 +54,10 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
 import com.blockvote.android.domain.model.Candidate
 import com.blockvote.android.domain.model.Election
 import com.blockvote.android.ui.components.CameraScanMode
@@ -63,6 +66,7 @@ import com.blockvote.android.ui.components.PrimaryGradientButton
 import com.blockvote.android.ui.theme.DeepNavy
 import com.blockvote.android.ui.theme.ElectricCyan
 import com.blockvote.android.ui.theme.EmeraldGreen
+import com.blockvote.android.ui.theme.FluentBlue
 import com.blockvote.android.ui.theme.NeonIndigo
 import com.blockvote.android.ui.vote.VoteStep
 import com.blockvote.android.ui.vote.VoteUiState
@@ -76,6 +80,7 @@ import com.google.accompanist.permissions.rememberPermissionState
 fun VotePortalScreen(
     initialElectionId: String? = null,
     onFinished: () -> Unit,
+    onNavigateToTwinRequest: (electionId: String, email: String) -> Unit = { _, _ -> },
     viewModel: VoteViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
@@ -126,9 +131,9 @@ fun VotePortalScreen(
                 label = "vote-step"
             ) { step ->
                 when (step) {
-                    VoteStep.ELECTION -> ElectionIdStep(state, viewModel)
-                    VoteStep.EMAIL -> EmailStep(state, viewModel)
-                    VoteStep.LIVENESS -> LivenessStep(state, viewModel)
+                    VoteStep.ELECTION -> ElectionIdStep(state, viewModel, onNavigateToTwinRequest)
+                    VoteStep.EMAIL -> EmailStep(state, viewModel, onNavigateToTwinRequest)
+                    VoteStep.LIVENESS -> LivenessStep(state, viewModel, onNavigateToTwinRequest)
                     VoteStep.CANDIDATE -> CandidateStep(state, viewModel)
                     VoteStep.OTP -> OtpStep(state, viewModel)
                     VoteStep.SUCCESS -> SuccessStep(state, onDone = {
@@ -208,7 +213,11 @@ private fun StepIndicator(step: VoteStep) {
 }
 
 @Composable
-private fun ElectionIdStep(state: VoteUiState, viewModel: VoteViewModel) {
+private fun ElectionIdStep(
+    state: VoteUiState,
+    viewModel: VoteViewModel,
+    onNavigateToTwinRequest: (String, String) -> Unit
+) {
     Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
         Text(
             text = "Open the link from your invite email, or paste the election ID here.",
@@ -230,11 +239,20 @@ private fun ElectionIdStep(state: VoteUiState, viewModel: VoteViewModel) {
             onClick = { viewModel.openElection() },
             modifier = Modifier.fillMaxWidth()
         )
+        TwinRequestLink(
+            electionId = state.electionIdInput,
+            email = state.emailInput,
+            onNavigate = onNavigateToTwinRequest
+        )
     }
 }
 
 @Composable
-private fun EmailStep(state: VoteUiState, viewModel: VoteViewModel) {
+private fun EmailStep(
+    state: VoteUiState,
+    viewModel: VoteViewModel,
+    onNavigateToTwinRequest: (String, String) -> Unit
+) {
     Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
         Text(
             text = "Use the email your election admin registered for ${state.selectedElection?.title.orEmpty()}.",
@@ -256,12 +274,21 @@ private fun EmailStep(state: VoteUiState, viewModel: VoteViewModel) {
             onClick = viewModel::submitEmail,
             modifier = Modifier.fillMaxWidth()
         )
+        TwinRequestLink(
+            electionId = state.selectedElection?.id ?: state.electionIdInput,
+            email = state.emailInput,
+            onNavigate = onNavigateToTwinRequest
+        )
     }
 }
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
-private fun LivenessStep(state: VoteUiState, viewModel: VoteViewModel) {
+private fun LivenessStep(
+    state: VoteUiState,
+    viewModel: VoteViewModel,
+    onNavigateToTwinRequest: (String, String) -> Unit
+) {
     val cameraPermission = rememberPermissionState(Manifest.permission.CAMERA)
 
     LaunchedEffect(Unit) {
@@ -315,6 +342,15 @@ private fun LivenessStep(state: VoteUiState, viewModel: VoteViewModel) {
                 modifier = Modifier.fillMaxWidth()
             )
         }
+        TwinRequestLink(
+            electionId = state.selectedElection?.id ?: state.electionIdInput,
+            email = state.emailInput,
+            onNavigate = onNavigateToTwinRequest,
+            highlight = !state.error.isNullOrBlank() &&
+                (state.error!!.contains("duplicate", ignoreCase = true) ||
+                    state.error!!.contains("twin", ignoreCase = true) ||
+                    state.error!!.contains("match", ignoreCase = true))
+        )
     }
 }
 
@@ -341,15 +377,20 @@ private fun CandidateStep(state: VoteUiState, viewModel: VoteViewModel) {
 
 @Composable
 private fun CandidateRow(candidate: Candidate, selected: Boolean, onClick: () -> Unit) {
+    val avatarUrl = when {
+        candidate.symbolUrl.isNotBlank() -> AssetUrlResolver.resolve(candidate.symbolUrl)
+        candidate.imageUrl.isNotBlank() -> AssetUrlResolver.resolve(candidate.imageUrl)
+        else -> ""
+    }.takeIf { it.startsWith("http") }.orEmpty()
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(if (selected) NeonIndigo.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.06f))
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (selected) NeonIndigo.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.06f))
             .border(
                 1.dp,
-                if (selected) ElectricCyan else Color.White.copy(alpha = 0.12f),
-                RoundedCornerShape(14.dp)
+                if (selected) FluentBlue else Color.White.copy(alpha = 0.12f),
+                RoundedCornerShape(12.dp)
             )
             .clickable(onClick = onClick)
             .padding(14.dp),
@@ -357,12 +398,23 @@ private fun CandidateRow(candidate: Candidate, selected: Boolean, onClick: () ->
     ) {
         Box(
             modifier = Modifier
-                .size(44.dp)
+                .size(48.dp)
                 .clip(CircleShape)
-                .background(ElectricCyan.copy(alpha = 0.2f)),
+                .background(FluentBlue.copy(alpha = 0.12f)),
             contentAlignment = Alignment.Center
         ) {
-            Text(candidate.name.take(1), color = ElectricCyan, fontWeight = FontWeight.Bold)
+            if (avatarUrl.isNotBlank()) {
+                AsyncImage(
+                    model = avatarUrl,
+                    contentDescription = "${candidate.name} party symbol",
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(CircleShape),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Text(candidate.name.take(1), color = FluentBlue, fontWeight = FontWeight.Bold)
+            }
         }
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -497,6 +549,30 @@ private fun SuccessStep(state: VoteUiState, onDone: () -> Unit) {
         Spacer(modifier = Modifier.height(24.dp))
         PrimaryGradientButton(text = "Done", onClick = onDone, modifier = Modifier.fillMaxWidth())
     }
+}
+
+@Composable
+private fun TwinRequestLink(
+    electionId: String,
+    email: String,
+    onNavigate: (String, String) -> Unit,
+    highlight: Boolean = false
+) {
+    Spacer(modifier = Modifier.height(16.dp))
+    Text(
+        text = if (highlight) {
+            "Flagged as a duplicate face? Request twin verification from an admin."
+        } else {
+            "Identical twin? Request admin verification"
+        },
+        color = if (highlight) Color(0xFFFFB74D) else Color.White.copy(alpha = 0.55f),
+        style = MaterialTheme.typography.labelMedium,
+        textAlign = TextAlign.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onNavigate(electionId, email) }
+            .padding(vertical = 8.dp)
+    )
 }
 
 @Composable

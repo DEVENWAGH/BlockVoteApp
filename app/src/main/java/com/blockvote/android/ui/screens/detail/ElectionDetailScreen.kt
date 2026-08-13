@@ -262,7 +262,7 @@ fun CandidateItem(
 @Preview(showBackground = true, backgroundColor = 0xFF0A0F1D)
 @Composable
 fun ElectionDetailPreview() {
-    val mockCandidate = Candidate("1", "John Doe", "Progressive Party", "", "Vision for progress.")
+    val mockCandidate = Candidate("1", "John Doe", "Progressive Party", "", "", "Vision for progress.")
     val mockElection = Election(
         id = "1",
         title = "Presidential Election 2026",
@@ -270,7 +270,7 @@ fun ElectionDetailPreview() {
         status = ElectionStatus.LIVE,
         candidates = listOf(
             mockCandidate,
-            Candidate("2", "Jane Smith", "Conservative Party", "", "Stability and growth.")
+            Candidate("2", "Jane Smith", "Conservative Party", "", "", "Stability and growth.")
         ),
         endDate = System.currentTimeMillis() + 86400000
     )

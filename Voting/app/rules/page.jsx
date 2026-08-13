@@ -45,7 +45,7 @@ const SECURITY_RULES = [
   {
     title: 'Biometric Sybil Defense & Liveness Verification',
     icon: Fingerprint,
-    desc: 'Before a vote is relayed, the voter must perform a 3D facial liveness check. An AWS Rekognition facial similarity comparison verifies the selfie against their registered face and cross-compares it with the faces of all users who have already voted in the active election. If a similarity >= 85% is detected on another cast ballot, the transaction is rejected.',
+    desc: 'Before a vote is relayed, the voter must perform a 3D facial liveness check. A facial similarity comparison verifies the selfie against their registered face and cross-compares it with the faces of all users who have already voted in the active election. If a similarity >= 85% is detected on another cast ballot, the transaction is rejected.',
     details: [
       'Checks for head rotation, lighting, and blink detection.',
       'Face parameters normalized locally to prevent camera distance bias.',

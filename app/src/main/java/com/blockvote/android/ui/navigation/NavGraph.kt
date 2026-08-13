@@ -11,6 +11,7 @@ import com.blockvote.android.ui.screens.dashboard.DashboardScreen
 import com.blockvote.android.ui.screens.detail.ElectionDetailScreen
 import com.blockvote.android.ui.screens.onboarding.OnboardingScreen
 import com.blockvote.android.ui.screens.receipt.ReceiptScreen
+import com.blockvote.android.ui.screens.twin.TwinRequestScreen
 import com.blockvote.android.ui.screens.vote.VotePortalScreen
 import kotlinx.serialization.Serializable
 
@@ -26,6 +27,11 @@ sealed interface Route : NavKey {
     data class ElectionDetail(val electionId: String) : Route
     @Serializable
     data class Receipt(val receiptId: String) : Route
+    @Serializable
+    data class TwinRequest(
+        val electionId: String = "",
+        val email: String = ""
+    ) : Route
 }
 
 @Composable
@@ -55,6 +61,9 @@ fun BlockVoteNavGraph(deepLinkElectionId: String? = null) {
                         onNavigateToVote = {
                             backStack.clear()
                             backStack.add(Route.VotePortal())
+                        },
+                        onNavigateToTwinRequest = {
+                            backStack.add(Route.TwinRequest())
                         }
                     )
                 }
@@ -78,6 +87,9 @@ fun BlockVoteNavGraph(deepLinkElectionId: String? = null) {
                                 backStack.clear()
                                 backStack.add(Route.Dashboard)
                             }
+                        },
+                        onNavigateToTwinRequest = { electionId, email ->
+                            backStack.add(Route.TwinRequest(electionId, email))
                         }
                     )
                 }
@@ -100,6 +112,17 @@ fun BlockVoteNavGraph(deepLinkElectionId: String? = null) {
                         onNavigateBackToDashboard = {
                             backStack.clear()
                             backStack.add(Route.Dashboard)
+                        }
+                    )
+                }
+                is Route.TwinRequest -> NavEntry(key) {
+                    TwinRequestScreen(
+                        initialElectionId = key.electionId.ifBlank { null },
+                        initialEmail = key.email.ifBlank { null },
+                        onBack = {
+                            if (backStack.size > 1) {
+                                backStack.removeLastOrNull()
+                            }
                         }
                     )
                 }

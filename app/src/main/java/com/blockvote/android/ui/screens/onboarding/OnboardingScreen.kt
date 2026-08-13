@@ -34,6 +34,7 @@ import com.blockvote.android.ui.theme.ElectricCyan
 fun OnboardingScreen(
     onNavigateToDashboard: () -> Unit,
     onNavigateToVote: () -> Unit = {},
+    onNavigateToTwinRequest: () -> Unit = {},
     viewModel: OnboardingViewModel = hiltViewModel()
 ) {
     val authState by viewModel.authState.collectAsState()
@@ -93,6 +94,21 @@ fun OnboardingScreen(
                     viewModel.authenticate(activity, onNavigateToVote)
                 }
             },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Text(
+            text = "Identical twin or similar face flagged?",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        PrimaryGradientButton(
+            text = "Request Twin Verification",
+            onClick = onNavigateToTwinRequest,
             modifier = Modifier.fillMaxWidth()
         )
 

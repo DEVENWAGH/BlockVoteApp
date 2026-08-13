@@ -10,6 +10,9 @@ import com.blockvote.android.data.remote.dto.SendOtpRequest
 import com.blockvote.android.data.remote.dto.SendOtpResponse
 import com.blockvote.android.data.remote.dto.VerifyOtpRequest
 import com.blockvote.android.data.remote.dto.VerifyOtpResponse
+import com.blockvote.android.data.remote.dto.TwinRequestBody
+import com.blockvote.android.data.remote.dto.TwinRequestResponse
+import com.blockvote.android.data.remote.dto.BiometricStatusResponse
 import com.blockvote.android.data.remote.dto.VoterLookupResponse
 import com.squareup.moshi.Moshi
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -61,6 +64,16 @@ class BlockVoteApi(
 
     fun verifyReceipt(txHash: String): AuditVerifyResponse =
         getJson("api/audit/verify", mapOf("txHash" to txHash), AuditVerifyResponse::class.java)
+
+    fun submitTwinRequest(body: TwinRequestBody): TwinRequestResponse =
+        postJson("api/biometric/twin-request", body, TwinRequestResponse::class.java)
+
+    fun getBiometricStatus(nullifierHash: String): BiometricStatusResponse =
+        getJson(
+            "api/biometric/status",
+            mapOf("nullifierHash" to nullifierHash),
+            BiometricStatusResponse::class.java
+        )
 
     private fun <T> getJson(
         path: String,

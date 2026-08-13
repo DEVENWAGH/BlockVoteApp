@@ -5,7 +5,7 @@ import Voter from '@/lib/models/Voter';
 
 export async function POST(req) {
   try {
-    const { email, electionId, nullifierHash } = await req.json();
+    const { email, electionId, nullifierHash, notes } = await req.json();
 
     if (!nullifierHash) {
       return NextResponse.json({ error: 'nullifierHash is required.' }, { status: 400 });
@@ -31,13 +31,15 @@ export async function POST(req) {
         faceConfidence: 0.9,
         provider: 'aws-rekognition',
         twinVerificationStatus: 'pending',
-        twinNotes: 'User submitted twin verification request.',
+        twinNotes: notes?.trim() || 'User submitted twin verification request.',
         registeredAt: new Date(),
         electionId: resolvedElectionId,
       });
     } else {
       record.twinVerificationStatus = 'pending';
-      if (!record.twinNotes) {
+      if (notes?.trim()) {
+        record.twinNotes = notes.trim();
+      } else if (!record.twinNotes) {
         record.twinNotes = 'User requested twin verification override.';
       }
       if (!record.electionId && resolvedElectionId) record.electionId = resolvedElectionId;

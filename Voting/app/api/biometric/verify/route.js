@@ -187,7 +187,7 @@ export async function POST(req) {
     const msg = err?.message || 'Biometric verification failed.';
     if (/credentials|UnrecognizedClient|InvalidClientTokenId|ExpiredToken/i.test(msg)) {
       return NextResponse.json(
-        { error: 'Face service is not configured. Check AWS Rekognition credentials.' },
+        { error: 'Face verification is temporarily unavailable. Please try again later.' },
         { status: 503 },
       );
     }

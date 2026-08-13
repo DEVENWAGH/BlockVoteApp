@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useWallet } from '@/context/WalletContext';
 import { Shield, Wallet, Lock, Award, Zap, RefreshCw, AlertCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
+import ThemeToggle from '@/components/ThemeToggle';
 
 const GUARDIAN_PROFILES = [
   {
@@ -129,8 +130,11 @@ export default function AdminAuthPage() {
 
   return (
     <div className="min-h-screen bg-canvas text-ink flex flex-col items-center justify-center p-6 relative overflow-hidden font-sans">
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#dee1e620_1px,transparent_1px),linear-gradient(to_bottom,#dee1e620_1px,transparent_1px)] bg-[size:48px_48px] pointer-events-none" />
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-primary/5 rounded-full blur-[100px] pointer-events-none" />
+      <div className="absolute top-6 right-6 z-20">
+        <ThemeToggle />
+      </div>
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#dee1e620_1px,transparent_1px),linear-gradient(to_bottom,#dee1e620_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,#1e293b50_1px,transparent_1px),linear-gradient(to_bottom,#1e293b50_1px,transparent_1px)] bg-[size:48px_48px] pointer-events-none" />
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-primary/5 dark:bg-primary/10 rounded-full blur-[100px] pointer-events-none" />
 
       <div className="w-full max-w-4xl space-y-12 z-10">
         
@@ -157,7 +161,7 @@ export default function AdminAuthPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3, delay: idx * 0.05 }}
                 key={profile.id}
-                className="bg-canvas border border-hairline hover:border-body rounded-xl p-6 relative flex flex-col justify-between shadow-sm group"
+                className="bg-canvas border border-hairline hover:border-body dark:hover:border-hairline rounded-xl p-6 relative flex flex-col justify-between shadow-sm group transition-colors"
               >
                 <div
                   className="absolute top-0 left-6 right-6 h-[2px] opacity-40 group-hover:opacity-100 transition-opacity"
@@ -187,7 +191,7 @@ export default function AdminAuthPage() {
         </div>
 
         {/* Authorization connect box */}
-        <div className="bg-canvas border border-hairline rounded-xl p-8 max-w-xl mx-auto shadow-sm relative overflow-hidden">
+        <div className="bg-canvas border border-hairline rounded-xl p-8 max-w-xl mx-auto shadow-sm relative overflow-hidden w-full">
           <div className="absolute inset-0 bg-gradient-to-br from-primary/2 to-transparent pointer-events-none" />
 
           <div className="relative text-center space-y-5">
@@ -203,7 +207,7 @@ export default function AdminAuthPage() {
             </div>
 
             {accessError && (
-              <div className="bg-canvas border border-semantic-down rounded-xl p-3 flex gap-2.5 items-start text-left text-xs text-semantic-down">
+              <div className="bg-red-50 border border-red-200 dark:bg-red-950/40 dark:border-red-800 rounded-xl p-3 flex gap-2.5 items-start text-left text-xs text-red-700 dark:text-red-300">
                 <AlertCircle size={15} className="shrink-0 mt-0.5" />
                 <span>{accessError}</span>
               </div>

@@ -175,7 +175,7 @@ fun FaceCaptureCamera(
         status = when {
             extraPersonAlert || count > 1 -> extraPersonMessage
             phase == LivenessPhase.CAPTURING -> "Capturing photo…"
-            phase == LivenessPhase.VERIFYING -> "Verifying with AWS… remove glasses if rejected."
+            phase == LivenessPhase.VERIFYING -> "Verifying your identity… remove glasses if rejected."
             count == 0 -> "Hold phone at arm's length. Keep your face in the oval."
             !farEnough && fill > MAX_FACE_FILL_FOR_WIDE_SCAN ->
                 "Too close — stretch your arm and move the phone farther for a wider room view."
@@ -429,7 +429,7 @@ fun FaceCaptureCamera(
         PrimaryGradientButton(
             text = when (phase) {
                 LivenessPhase.CAPTURING -> "Capturing…"
-                LivenessPhase.VERIFYING -> "Verifying with AWS…"
+                LivenessPhase.VERIFYING -> "Verifying your identity…"
                 LivenessPhase.READY -> if (retryToken > 0) "Recapture face" else "Capture now"
                 else -> when {
                     extraPersonAlert || faceCount > 1 -> "Another person detected — restarting scan"

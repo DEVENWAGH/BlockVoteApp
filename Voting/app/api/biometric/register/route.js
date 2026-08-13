@@ -19,7 +19,7 @@ export async function POST(req) {
     const awsConfigured = isAWSConfigured();
     if (awsConfigured && !image) {
       return NextResponse.json(
-        { error: 'Image (base64 data URL) is required for AWS Rekognition.' },
+        { error: 'A face photo is required for biometric registration.' },
         { status: 400 }
       );
     }
@@ -115,7 +115,7 @@ export async function POST(req) {
       } catch (awsErr) {
         console.error('[biometric/register] AWS Rekognition error:', awsErr);
         return NextResponse.json(
-          { error: `AWS Rekognition Face Detection failed: ${awsErr.message}` },
+          { error: 'Face detection failed. Please retake your photo in good lighting.' },
           { status: 500 }
         );
       }

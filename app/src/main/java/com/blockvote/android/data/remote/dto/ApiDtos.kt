@@ -111,3 +111,25 @@ data class ApiErrorBody(
     val error: String? = null,
     val message: String? = null
 )
+
+data class TwinRequestBody(
+    val nullifierHash: String,
+    val electionId: String? = null,
+    val email: String? = null,
+    val notes: String? = null
+)
+
+data class TwinRequestResponse(
+    val success: Boolean? = null,
+    val message: String? = null,
+    val status: String? = null,
+    val error: String? = null
+)
+
+data class BiometricStatusResponse(
+    val registered: Boolean? = null,
+    val verified: Boolean? = null,
+    val twinVerificationStatus: String? = null,
+    val bypassDuplicateCheck: Boolean? = null,
+    val error: String? = null
+)

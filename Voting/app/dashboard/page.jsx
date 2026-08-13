@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useDropzone } from 'react-dropzone';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Button } from '@fluentui/react-components';
 import {
   Users, LogOut, PlusCircle, Upload, Download, RefreshCw,
   FileSpreadsheet, CheckCircle, AlertCircle, Loader2, Building2,
@@ -14,31 +15,49 @@ import {
 } from 'lucide-react';
 import ElectionResults from '@/components/ElectionResults';
 import ThemeToggle from '@/components/ThemeToggle';
+import PartySymbol from '@/components/PartySymbol';
+import { resolveAssetUrl } from '@/lib/urlUtils';
 
 const PHASE = ['Registration', 'Voting', 'Completed'];
 const PHASE_COLORS = [
-  'bg-blue-50 text-blue-600 border-blue-200',
-  'bg-emerald-50 text-emerald-600 border-emerald-200',
-  'bg-surface-strong text-muted border-hairline',
+  'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800',
+  'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800',
+  'bg-surface-strong text-muted border-hairline dark:bg-surface-strong/60 dark:text-body',
 ];
 
 // ── Shared UI Components ──────────────────────────────────────────────────────
 function FieldInput({ label, value, onChange, placeholder = '', type = 'text', multiline = false }) {
-  const base = "w-full bg-canvas border border-hairline focus:border-primary text-ink px-4 py-2.5 rounded-lg outline-none transition text-sm placeholder:text-muted";
+  const sharedClass =
+    'w-full bg-canvas border border-hairline rounded-lg px-3 py-2.5 text-sm text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition';
   return (
     <div className="space-y-1.5">
-      <label className="block text-xs font-semibold text-body uppercase tracking-wider">{label}</label>
-      {multiline
-        ? <textarea value={value} onChange={onChange} placeholder={placeholder} rows={3} className={`${base} resize-none`} />
-        : <input type={type} value={value} onChange={onChange} placeholder={placeholder} className={base} />
-      }
+      <label className="block text-sm font-semibold text-ink">{label}</label>
+      {multiline ? (
+        <textarea
+          value={value}
+          onChange={onChange}
+          placeholder={placeholder}
+          rows={3}
+          className={`${sharedClass} resize-y min-h-[80px]`}
+        />
+      ) : (
+        <input
+          type={type}
+          value={value}
+          onChange={onChange}
+          placeholder={placeholder}
+          className={sharedClass}
+        />
+      )}
     </div>
   );
 }
 
 function Toast({ type, msg }) {
   const isErr = type === 'error';
-  const bg = isErr ? 'bg-red-50 border-red-200 text-red-700' : 'bg-green-50 border-green-200 text-green-700';
+  const bg = isErr
+    ? 'bg-red-50 border-red-200 text-red-700 dark:bg-red-950/40 dark:border-red-800 dark:text-red-300'
+    : 'bg-green-50 border-green-200 text-green-700 dark:bg-green-950/40 dark:border-green-800 dark:text-green-300';
   const Icon = isErr ? AlertCircle : CheckCircle;
   return (
     <motion.div 
@@ -55,10 +74,10 @@ function Toast({ type, msg }) {
 // ── Candidate Management Panel ────────────────────────────────────────────────
 function CandidatePanel({ slug, electionId }) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState({ name: '', party: '', symbol: '', manifesto: '', photoUrl: '' });
-  const [photoFile, setPhotoFile] = useState(null);
-  const [photoPreview, setPhotoPreview] = useState('');
-  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [form, setForm] = useState({ name: '', party: '', symbol: '', manifesto: '' });
+  const [symbolFile, setSymbolFile] = useState(null);
+  const [symbolPreview, setSymbolPreview] = useState('');
+  const [uploadingSymbol, setUploadingSymbol] = useState(false);
   const [msg, setMsg] = useState(null);
 
   // Fetch candidates using React Query
@@ -72,33 +91,40 @@ function CandidatePanel({ slug, electionId }) {
     enabled: !!slug && electionId != null,
   });
 
-  const onPhotoSelect = (e) => {
+  const onSymbolSelect = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setPhotoFile(file);
-    setPhotoPreview(URL.createObjectURL(file));
+    setSymbolFile(file);
+    setSymbolPreview(URL.createObjectURL(file));
+    setForm((f) => ({ ...f, symbol: '' }));
   };
 
-  const clearPhoto = () => {
-    setPhotoFile(null);
-    setPhotoPreview('');
-    setForm((f) => ({ ...f, photoUrl: '' }));
+  const clearSymbol = () => {
+    setSymbolFile(null);
+    setSymbolPreview('');
+    setForm((f) => ({ ...f, symbol: '' }));
   };
 
-  const uploadPhoto = async () => {
-    if (!photoFile) return form.photoUrl;
-    setUploadingPhoto(true);
-    try {
-      const fd = new FormData();
-      fd.append('file', photoFile);
-      fd.append('folder', `candidates/${slug}`);
-      const r = await fetch('/api/imagekit/upload', { method: 'POST', body: fd });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || 'Photo upload failed');
-      return d.url;
-    } finally {
-      setUploadingPhoto(false);
+  const uploadFile = async (file, folder) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('folder', folder);
+    const r = await fetch('/api/uploads', { method: 'POST', body: fd });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Upload failed');
+    return d.url;
+  };
+
+  const uploadSymbol = async () => {
+    if (symbolFile) {
+      setUploadingSymbol(true);
+      try {
+        return await uploadFile(symbolFile, `party-symbols/${slug}`);
+      } finally {
+        setUploadingSymbol(false);
+      }
     }
+    return form.symbol;
   };
 
   // Add Candidate Mutation
@@ -115,8 +141,8 @@ function CandidatePanel({ slug, electionId }) {
     },
     onSuccess: (d) => {
       setMsg({ type: 'success', text: `Candidate "${form.name}" added successfully.` });
-      setForm({ name: '', party: '', symbol: '', manifesto: '', photoUrl: '' });
-      clearPhoto();
+      setForm({ name: '', party: '', symbol: '', manifesto: '' });
+      clearSymbol();
       queryClient.invalidateQueries({ queryKey: ['candidates', slug, electionId] });
     },
     onError: (e) => {
@@ -127,11 +153,9 @@ function CandidatePanel({ slug, electionId }) {
   const handleAdd = async () => {
     setMsg(null);
     try {
-      let photoUrl = form.photoUrl;
-      if (photoFile) {
-        photoUrl = await uploadPhoto();
-      }
-      addMutation.mutate({ ...form, photoUrl });
+      const symbolUrl = await uploadSymbol();
+      if (!symbolUrl) throw new Error('Upload a party symbol image before adding the candidate.');
+      addMutation.mutate({ ...form, symbol: symbolUrl });
     } catch (e) {
       setMsg({ type: 'error', text: e.message });
     }
@@ -149,44 +173,44 @@ function CandidatePanel({ slug, electionId }) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <FieldInput label="Name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Full name" />
         <FieldInput label="Party / Group" value={form.party} onChange={e => setForm(f => ({ ...f, party: e.target.value }))} placeholder="Affiliation" />
-        <FieldInput label="Ballot Symbol" value={form.symbol} onChange={e => setForm(f => ({ ...f, symbol: e.target.value }))} placeholder="e.g. 🦅" />
         <FieldInput label="Manifesto" value={form.manifesto} onChange={e => setForm(f => ({ ...f, manifesto: e.target.value }))} placeholder="Candidate goals..." multiline />
       </div>
 
       <div>
-        <label className="block text-xs font-semibold text-body mb-2 uppercase tracking-wider">Candidate Photo</label>
+        <label className="block text-sm font-semibold text-ink">Party Symbol (required)</label>
+        <p className="text-xs text-body mt-0.5 mb-2">Upload the official ballot symbol image shown on the ballot.</p>
         <div className="flex items-center gap-4">
-          {photoPreview ? (
+          {symbolPreview || form.symbol ? (
             <div className="relative w-16 h-16 rounded-lg overflow-hidden border border-hairline">
-              <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
-              <button type="button" onClick={clearPhoto} className="absolute top-1 right-1 bg-ink/75 hover:bg-ink rounded-full p-0.5 text-white transition cursor-pointer">
+              <img src={symbolPreview || resolveAssetUrl(form.symbol)} alt="Symbol preview" className="w-full h-full object-contain bg-canvas" />
+              <button type="button" onClick={clearSymbol} className="absolute top-1 right-1 bg-ink/75 hover:bg-ink rounded-full p-0.5 text-white transition cursor-pointer">
                 <X size={10} />
               </button>
             </div>
           ) : (
             <label className="flex items-center gap-2 cursor-pointer bg-canvas border border-dashed border-hairline hover:border-primary rounded-lg px-4 py-3 text-sm text-body transition">
               <ImagePlus size={16} className="text-primary" />
-              <span>Choose photo</span>
-              <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={onPhotoSelect} />
+              <span>Upload symbol</span>
+              <input type="file" accept="image/jpeg,image/png,image/webp,image/svg+xml" className="hidden" onChange={onSymbolSelect} />
             </label>
           )}
-          <span className="text-xs text-muted">JPEG, PNG, WebP format</span>
+          <span className="text-xs text-muted">PNG, SVG, or JPEG · max 5 MB</span>
         </div>
       </div>
 
       {msg && <Toast type={msg.type} msg={msg.text} />}
 
-      <button
+      <Button
+        appearance="primary"
         onClick={handleAdd}
-        disabled={addMutation.isPending || uploadingPhoto || !form.name || !form.party || !form.symbol}
-        className="flex items-center gap-2 bg-primary hover:bg-primary-active text-white px-6 py-2.5 rounded-full font-semibold text-sm transition-all disabled:opacity-50 shadow-sm cursor-pointer"
+        disabled={addMutation.isPending || uploadingSymbol || !form.name || !form.party || (!form.symbol && !symbolFile)}
       >
-        {addMutation.isPending || uploadingPhoto ? (
-          <><Loader2 size={14} className="animate-spin" /> Registering...</>
+        {addMutation.isPending || uploadingSymbol ? (
+          <><Loader2 size={14} className="animate-spin inline mr-2" /> Registering…</>
         ) : (
-          <><UserPlus size={14} /> Add Candidate</>
+          <><UserPlus size={14} className="inline mr-2" /> Add Candidate</>
         )}
-      </button>
+      </Button>
 
       {/* Candidate Grid */}
       {isLoading ? (
@@ -197,13 +221,7 @@ function CandidatePanel({ slug, electionId }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {candidates.map(c => (
               <div key={c.id} className="bg-surface-soft border border-hairline rounded-lg p-3.5 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-canvas border border-hairline flex items-center justify-center text-lg overflow-hidden shrink-0">
-                  {c.photoUrl ? (
-                    <img src={c.photoUrl} alt={c.name} className="w-full h-full object-cover" />
-                  ) : (
-                    c.symbol || '🗳️'
-                  )}
-                </div>
+                <PartySymbol symbol={c.symbol} name={c.name} size="md" />
                 <div className="min-w-0">
                   <p className="text-ink font-semibold text-sm truncate">{c.name}</p>
                   <p className="text-body text-xs truncate">{c.party}</p>
@@ -299,7 +317,7 @@ function TwinOverridesPanel({ slug, electionId }) {
         <div className="text-center py-6 border border-dashed border-hairline rounded-xl bg-canvas space-y-3">
           <p className="text-body text-xs font-semibold">No twin override requests found for this election.</p>
           <p className="text-muted text-[11px] px-4">
-            If you believe requests exist but aren't showing, existing biometric records may predate election scoping.
+            If you believe requests exist but aren&apos;t showing, existing biometric records may predate election scoping.
             Use the sync button below to backfill missing data.
           </p>
           <button
@@ -337,9 +355,9 @@ function TwinOverridesPanel({ slug, electionId }) {
                   <td className="px-4 py-3 font-mono font-bold text-primary">{r.twinMatchSimilarity}%</td>
                   <td className="px-4 py-3">
                     <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold uppercase tracking-wider ${
-                      r.twinVerificationStatus === 'approved' ? 'bg-green-50 text-green-700 border-green-200' :
-                      r.twinVerificationStatus === 'rejected' ? 'bg-red-50 text-red-700 border-red-200' :
-                      'bg-amber-50 text-amber-700 border-amber-200'
+                      r.twinVerificationStatus === 'approved' ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-950/40 dark:text-green-300 dark:border-green-800' :
+                      r.twinVerificationStatus === 'rejected' ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800' :
+                      'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
                     }`}>
                       {r.twinVerificationStatus}
                     </span>
@@ -532,11 +550,11 @@ function CsvUploadPanel({ electionId }) {
               {counts.total} total
             </span>
             {counts.pending > 0 && (
-              <span className="text-xs font-mono font-semibold bg-amber-50 border border-amber-200 text-amber-700 px-2 py-0.5 rounded-full">
+              <span className="text-xs font-mono font-semibold bg-amber-50 border border-amber-200 text-amber-700 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300 px-2 py-0.5 rounded-full">
                 {counts.pending} pending
               </span>
             )}
-            <span className="text-xs font-mono font-semibold bg-green-50 border border-green-200 text-green-700 px-2 py-0.5 rounded-full">
+            <span className="text-xs font-mono font-semibold bg-green-50 border border-green-200 text-green-700 dark:bg-green-950/40 dark:border-green-800 dark:text-green-300 px-2 py-0.5 rounded-full">
               {counts.registered} registered
             </span>
           </div>
@@ -582,9 +600,9 @@ function CsvUploadPanel({ electionId }) {
                     <td className="px-5 py-3 text-muted hidden md:table-cell">{v.phone || '—'}</td>
                     <td className="px-5 py-3">
                       <span className={`text-xs px-2.5 py-0.5 rounded-full border font-semibold ${
-                        v.status === 'registered' ? 'bg-green-50 text-green-700 border-green-200' :
-                        v.status === 'rejected'   ? 'bg-red-50 text-red-700 border-red-200'   :
-                                                    'bg-amber-50 text-amber-700 border-amber-200'
+                        v.status === 'registered' ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-950/40 dark:text-green-300 dark:border-green-800' :
+                        v.status === 'rejected'   ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800'   :
+                                                    'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
                       }`}>
                         {v.status}
                       </span>
@@ -677,14 +695,14 @@ function ElectionsTab() {
     if (election.phase === 2) return null;
     if (election.guardianApproved) {
       return (
-        <span className="text-xs px-2.5 py-0.5 rounded-full border font-semibold bg-green-50 text-green-700 border-green-200 flex items-center gap-1">
+        <span className="text-xs px-2.5 py-0.5 rounded-full border font-semibold bg-green-50 text-green-700 border-green-200 dark:bg-green-950/40 dark:text-green-300 dark:border-green-800 flex items-center gap-1">
           <Shield size={10} /> Verified
         </span>
       );
     }
     if (election.pendingApproval) {
       return (
-        <span className="text-xs px-2.5 py-0.5 rounded-full border font-semibold bg-amber-50 text-amber-700 border-amber-200 flex items-center gap-1 animate-pulse">
+        <span className="text-xs px-2.5 py-0.5 rounded-full border font-semibold bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800 flex items-center gap-1 animate-pulse">
           <Clock size={10} /> Awaiting Guardian
         </span>
       );
@@ -814,7 +832,7 @@ function ElectionsTab() {
                             </button>
                           )}
                           {isRegistration && e.pendingApproval && (
-                            <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 px-4 py-2 rounded-full text-xs font-semibold">
+                            <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300 px-4 py-2 rounded-full text-xs font-semibold">
                               <Clock size={13} className="animate-pulse" /> Pending security clearance from Guardian Portal...
                             </div>
                           )}
@@ -860,11 +878,11 @@ function ElectionsTab() {
 
                         {/* App invite link for voters */}
                         {isVoting && (
-                          <div className="bg-green-50 border border-green-200 rounded-xl p-5 text-green-700">
+                          <div className="bg-green-50 border border-green-200 dark:bg-green-950/30 dark:border-green-800 rounded-xl p-5 text-green-700 dark:text-green-300">
                             <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
                               <Vote size={15} /> Mobile voting is open
                             </h4>
-                            <p className="text-body text-xs mb-3">
+                            <p className="text-body dark:text-green-400/80 text-xs mb-3">
                               Share this link — it opens the Block Vote Android app. Voters also receive it by email after CSV upload.
                             </p>
                             <div className="bg-canvas border border-hairline rounded-lg px-4 py-3 flex items-center justify-between gap-3">
@@ -926,7 +944,6 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-canvas text-ink flex flex-col md:flex-row font-sans">
-      
       {/* Sidebar - Desktop */}
       <aside className="hidden md:flex w-64 shrink-0 border-r border-hairline bg-surface-soft flex-col">
         {/* Logo */}
@@ -972,7 +989,7 @@ export default function DashboardPage() {
           <button
             id="dashboard-signout-btn"
             onClick={() => signOut({ callbackUrl: '/' })}
-            className="w-full flex items-center gap-2.5 px-4 py-3 rounded-full text-sm text-semantic-down hover:bg-red-50 transition-all font-semibold cursor-pointer border border-transparent hover:border-red-100"
+            className="w-full flex items-center gap-2.5 px-4 py-3 rounded-full text-sm text-semantic-down hover:bg-red-50 dark:hover:bg-red-950/30 transition-all font-semibold cursor-pointer border border-transparent hover:border-red-100 dark:hover:border-red-900"
           >
             <LogOut size={15} /> 
             <span>Sign out</span>
@@ -992,7 +1009,7 @@ export default function DashboardPage() {
           <ThemeToggle />
           <button
             onClick={() => signOut({ callbackUrl: '/' })}
-            className="flex items-center gap-1 text-xs text-semantic-down border border-red-200 bg-red-50/50 px-2.5 py-1.5 rounded-full font-semibold cursor-pointer"
+            className="flex items-center gap-1 text-xs text-semantic-down border border-red-200 bg-red-50/50 dark:bg-red-950/30 dark:border-red-800 px-2.5 py-1.5 rounded-full font-semibold cursor-pointer"
           >
             <LogOut size={11} /> Out
           </button>
@@ -1000,7 +1017,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Main Container */}
-      <main className="flex-1 overflow-auto bg-canvas">
+      <main className="flex-1 overflow-auto bg-canvas min-h-0">
         {/* Breadcrumb row */}
         <div className="border-b border-hairline bg-surface-soft/40 px-6 sm:px-10 py-5 flex items-center justify-between gap-3">
           <div className="min-w-0">

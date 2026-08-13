@@ -2,6 +2,7 @@ package com.blockvote.android.data.repository
 
 import com.blockvote.android.BuildConfig
 import com.blockvote.android.data.remote.ApiException
+import com.blockvote.android.data.remote.AssetUrlResolver
 import com.blockvote.android.data.remote.BlockVoteApi
 import com.blockvote.android.data.remote.dto.BiometricVerifyRequest
 import com.blockvote.android.data.remote.dto.SendOtpRequest
@@ -53,7 +54,8 @@ class RemoteVotingRepository @Inject constructor(
                     id = c.id.toString(),
                     name = c.name,
                     party = c.party.orEmpty(),
-                    imageUrl = c.photoUrl.orEmpty(),
+                    imageUrl = AssetUrlResolver.resolve(c.photoUrl.orEmpty()),
+                    symbolUrl = AssetUrlResolver.resolve(c.symbol.orEmpty()),
                     description = c.manifesto.orEmpty()
                 )
             }
@@ -164,6 +166,35 @@ class RemoteVotingRepository @Inject constructor(
         body.verified == true || body.success == true
     }
 
+    override suspend fun submitTwinRequest(
+        nullifierHash: String,
+        electionId: String,
+        email: String,
+        notes: String
+    ): Result<String> = apiCall {
+        if (BuildConfig.USE_DEMO_DATA) {
+            return@apiCall "Twin verification request submitted (demo)."
+        }
+        val body = api.submitTwinRequest(
+            com.blockvote.android.data.remote.dto.TwinRequestBody(
+                nullifierHash = nullifierHash,
+                electionId = electionId,
+                email = email,
+                notes = notes.ifBlank { null }
+            )
+        )
+        if (body.success != true && !body.error.isNullOrBlank()) {
+            throw ApiException(body.error)
+        }
+        body.message ?: "Twin verification override requested successfully."
+    }
+
+    override suspend fun getTwinVerificationStatus(nullifierHash: String): Result<String> = apiCall {
+        if (BuildConfig.USE_DEMO_DATA) return@apiCall "pending"
+        val body = api.getBiometricStatus(nullifierHash)
+        body.twinVerificationStatus ?: "none"
+    }
+
     override fun observeReceipt(id: String): Flow<VoteReceipt?> =
         receipts.map { it[id] }
 
@@ -182,7 +213,7 @@ class RemoteVotingRepository @Inject constructor(
     )
 
     private fun demoCandidates() = listOf(
-        Candidate("1", "Asha Patel", "Progress", "", "Campus wellbeing & transparency."),
-        Candidate("2", "Rohan Mehta", "Unity", "", "Sports, clubs, and affordability.")
+        Candidate("1", "Asha Patel", "Progress", "", "", "Campus wellbeing & transparency."),
+        Candidate("2", "Rohan Mehta", "Unity", "", "", "Sports, clubs, and affordability.")
     )
 }

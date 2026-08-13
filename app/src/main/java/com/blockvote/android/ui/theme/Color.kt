@@ -2,11 +2,18 @@ package com.blockvote.android.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
+// Microsoft Fluent Design tokens (voter app)
+val FluentBlue = Color(0xFF0078D4)
+val FluentBlueLight = Color(0xFF2899F5)
+val FluentNeutralBackground = Color(0xFFFAFAFA)
+val FluentNeutralForeground = Color(0xFF242424)
+val FluentNeutralStroke = Color(0xFFE0E0E0)
+
 val DeepNavy = Color(0xFF0A0F1D)
-val ElectricCyan = Color(0xFF00F2FE)
-val NeonIndigo = Color(0xFF4FACFE)
-val EmeraldGreen = Color(0xFF10B981)
-val CyberAmber = Color(0xFFF59E0B)
+val ElectricCyan = FluentBlueLight
+val NeonIndigo = FluentBlue
+val EmeraldGreen = Color(0xFF107C10)
+val CyberAmber = Color(0xFFF7630C)
 
 val DarkPrimary = ElectricCyan
 val DarkSecondary = NeonIndigo

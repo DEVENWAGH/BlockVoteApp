@@ -198,12 +198,12 @@ export default function VoterAnalytics({ slug, electionId, electionTitle }) {
           </div>
         </div>
 
-        {/* 2. AWS Rekognition Gender Integrity Check */}
+        {/* 2. Biometric gender integrity check */}
         <div className="bg-canvas border border-hairline rounded-xl p-5 shadow-sm flex flex-col justify-between space-y-4">
           <div>
             <h4 className="font-bold text-ink text-sm flex items-center gap-1.5">
               <Percent size={15} className="text-primary" />
-              AWS Rekognition Biometric Validation
+              Biometric Validation
             </h4>
             <p className="text-xs text-body mt-1">Cross-referencing voter list genders against face-scan estimations.</p>
           </div>
@@ -259,7 +259,7 @@ export default function VoterAnalytics({ slug, electionId, electionTitle }) {
 
           {/* Verification Status Alert */}
           {matchStats.mismatches > 0 ? (
-            <div className="bg-red-50/55 border border-red-150 rounded-lg p-3 text-red-700 text-xs flex items-start gap-2">
+            <div className="bg-red-50/55 border border-red-150 dark:bg-red-950/40 dark:border-red-800 rounded-lg p-3 text-red-700 dark:text-red-300 text-xs flex items-start gap-2">
               <ShieldAlert size={14} className="shrink-0 mt-0.5 animate-bounce" />
               <div>
                 <p className="font-bold">Biometric Gender Mismatches Flagged</p>
@@ -267,7 +267,7 @@ export default function VoterAnalytics({ slug, electionId, electionTitle }) {
               </div>
             </div>
           ) : (
-            <div className="bg-green-50/50 border border-green-150 rounded-lg p-3 text-green-700 text-xs flex items-start gap-2">
+            <div className="bg-green-50/50 border border-green-150 dark:bg-green-950/40 dark:border-green-800 rounded-lg p-3 text-green-700 dark:text-green-300 text-xs flex items-start gap-2">
               <ShieldCheck size={14} className="shrink-0 mt-0.5" />
               <div>
                 <p className="font-bold">Biometric Integrity Confirmed</p>

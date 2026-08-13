@@ -23,13 +23,46 @@ const SECURITY_HEADERS = {
   'X-XSS-Protection': '1; mode=block',
 };
 
+// CSP img-src entries — same-origin /api/assets/* is covered by 'self'.
+// S3 hosts below are kept only for any legacy direct URLs still stored on-chain.
+function buildS3ImgSrc() {
+  const sources = new Set(['https://*.s3.amazonaws.com']);
+
+  const publicUrl = process.env.AWS_S3_PUBLIC_URL;
+  if (publicUrl) {
+    try {
+      sources.add(`https://${new URL(publicUrl).hostname}`);
+    } catch {
+      // ignore invalid AWS_S3_PUBLIC_URL
+    }
+  }
+
+  const region = process.env.AWS_REGION || process.env.AWS_S3_REGION;
+  if (region && region !== 'us-east-1') {
+    sources.add(`https://*.s3.${region}.amazonaws.com`);
+  }
+
+  const bucket = process.env.AWS_S3_BUCKET;
+  if (bucket && region) {
+    const host =
+      region === 'us-east-1'
+        ? `${bucket}.s3.amazonaws.com`
+        : `${bucket}.s3.${region}.amazonaws.com`;
+    sources.add(`https://${host}`);
+  }
+
+  return Array.from(sources).join(' ');
+}
+
+const S3_IMG_SRC = buildS3ImgSrc();
+
 // Strict CSP for the voting flow — no analytics, no third-party scripts
 const VOTE_CSP = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' 'unsafe-eval'",  // Next.js requires these
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com",
-  "img-src 'self' data: blob: https://ik.imagekit.io https://*.ftcdn.net",
+  `img-src 'self' data: blob: https://ik.imagekit.io https://*.ftcdn.net ${S3_IMG_SRC}`,
   "media-src 'self' blob:",        // For biometric camera feed
   "connect-src 'self'",            // No third-party API calls during voting
   "frame-ancestors 'none'",        // Never allow iframe embedding
@@ -43,7 +76,7 @@ const DEFAULT_CSP = [
   "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com",
-  "img-src 'self' data: blob: https://ik.imagekit.io https://*.ftcdn.net",
+  "img-src 'self' data: blob: https://ik.imagekit.io https://*.ftcdn.net ${S3_IMG_SRC}",
   "media-src 'self' blob:",
   "connect-src 'self' https://nominatim.openstreetmap.org https://api.pinata.cloud https://*.pinata.cloud",
   "frame-ancestors 'none'",

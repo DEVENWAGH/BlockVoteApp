@@ -25,6 +25,13 @@ interface VotingRepository {
         electionTitle: String = ""
     ): Result<VoteReceipt>
     suspend fun verifyOnChain(txHash: String): Result<Boolean>
+    suspend fun submitTwinRequest(
+        nullifierHash: String,
+        electionId: String,
+        email: String,
+        notes: String = ""
+    ): Result<String>
+    suspend fun getTwinVerificationStatus(nullifierHash: String): Result<String>
     fun observeReceipt(id: String): Flow<VoteReceipt?>
 }
 

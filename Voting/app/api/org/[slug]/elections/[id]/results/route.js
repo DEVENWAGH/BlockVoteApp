@@ -6,6 +6,8 @@ import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Election from '@/lib/models/Election';
 import { ethers } from 'ethers';
+import { resolveAssetUrl } from '@/lib/urlUtils';
+import { getRequestOrigin } from '@/lib/s3';
 
 async function getReadContract() {
   const abi = (
@@ -40,12 +42,13 @@ export async function GET(req, { params }) {
 
     const contract = await getReadContract();
     const rawCandidates = await contract.getCandidates(electionId);
+    const origin = getRequestOrigin(req);
     const candidates = rawCandidates
       .map((c) => ({
         id: Number(c.id),
         name: c.name,
         party: c.party,
-        symbol: c.symbol,
+        symbol: resolveAssetUrl(c.symbol, origin),
         voteCount: Number(c.voteCount),
       }))
       .sort((a, b) => b.voteCount - a.voteCount);

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Trophy, Vote, Loader2, AlertCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
+import PartySymbol from '@/components/PartySymbol';
 
 const OP_LABELS = {
   register_voter: 'Voter Registration',
@@ -80,9 +81,7 @@ export default function ElectionResults({ slug, electionId, electionTitle, compa
           animate={{ opacity: 1, y: 0 }}
           className="bg-canvas border border-accent-yellow rounded-xl p-5 flex items-center gap-4 shadow-sm"
         >
-          <div className="w-12 h-12 rounded-full bg-surface-soft border border-hairline flex items-center justify-center text-2xl shrink-0">
-            {winner.symbol || '🏆'}
-          </div>
+          <PartySymbol symbol={winner.symbol} name={winner.name} size="lg" />
           <div className="min-w-0">
             <p className="text-xs text-accent-yellow font-semibold uppercase tracking-wider flex items-center gap-1">
               <Trophy size={12} /> Winner Declared
@@ -120,7 +119,7 @@ export default function ElectionResults({ slug, electionId, electionTitle, compa
               <div className="relative flex items-center justify-between gap-3">
                 <div className="flex items-center gap-4 min-w-0">
                   <span className="text-muted font-mono text-sm w-6">#{rank + 1}</span>
-                  <span className="text-2xl">{c.symbol || '🗳️'}</span>
+                  <PartySymbol symbol={c.symbol} name={c.name} size="md" />
                   <div className="min-w-0">
                     <p className="font-normal text-ink text-base truncate">{c.name}</p>
                     <p className="text-xs text-muted truncate">{c.party}</p>

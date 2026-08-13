@@ -26,6 +26,7 @@ data class Candidate(
     val name: String,
     val party: String,
     val imageUrl: String,
+    val symbolUrl: String = "",
     val description: String
 )
 

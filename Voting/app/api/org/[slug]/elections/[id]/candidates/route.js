@@ -3,12 +3,14 @@
  * Path keeps legacy /api/org/[slug]/... shape; slug is ignored.
  */
 import { NextResponse } from "next/server";
+import { ethers } from "ethers";
 import connectDB from "@/lib/db";
 import Election from "@/lib/models/Election";
 import { relayAddCandidate } from "@/lib/relay";
 import { pinJSON, getIPFSUrl } from "@/lib/ipfs";
-import { ethers } from "ethers";
-import { auth } from "@/auth";
+import { isAllowedAssetUrl, resolveAssetUrl } from '@/lib/urlUtils';
+import { getRequestOrigin } from '@/lib/s3';
+import { auth } from '@/auth';
 
 async function getReadContract() {
   const abi = (
@@ -37,13 +39,14 @@ export async function GET(req, { params }) {
 
     const contract = await getReadContract();
     const rawCandidates = await contract.getCandidates(electionId);
+    const origin = getRequestOrigin(req);
     const candidates = rawCandidates.map((c) => ({
       id: Number(c.id),
       name: c.name,
       party: c.party,
-      symbol: c.symbol,
+      symbol: resolveAssetUrl(c.symbol, origin),
       manifesto: c.manifesto,
-      photoUrl: c.photoUrl,
+      photoUrl: resolveAssetUrl(c.photoUrl, origin),
       voteCount: Number(c.voteCount),
     }));
 
@@ -84,11 +87,15 @@ export async function POST(req, { params }) {
         { error: "Party / affiliation is required" },
         { status: 400 },
       );
-    if (!symbol?.trim())
+    if (!isAllowedAssetUrl(symbol))
       return NextResponse.json(
-        { error: "Symbol is required" },
+        { error: "Party symbol image is required — upload a symbol image." },
         { status: 400 },
       );
+
+    const origin = getRequestOrigin(req);
+    const symbolUrl = resolveAssetUrl(symbol.trim(), origin);
+    const photoUrlResolved = photoUrl ? resolveAssetUrl(photoUrl.trim(), origin) : '';
 
     await connectDB();
     const electionDoc = await Election.findOne({ electionId });
@@ -112,9 +119,9 @@ export async function POST(req, { params }) {
       electionId,
       name.trim(),
       party.trim(),
-      symbol.trim(),
+      symbolUrl,
       manifesto,
-      photoUrl,
+      photoUrlResolved,
       "",
     );
 
@@ -127,9 +134,9 @@ export async function POST(req, { params }) {
           electionId,
           name: name.trim(),
           party: party.trim(),
-          symbol: symbol.trim(),
+          symbol: symbolUrl,
           manifesto,
-          photoUrl,
+          photoUrl: photoUrlResolved,
           txHash,
           pinnedAt: new Date().toISOString(),
         },

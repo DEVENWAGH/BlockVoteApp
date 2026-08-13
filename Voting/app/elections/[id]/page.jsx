@@ -12,6 +12,7 @@ import {
 import Link from 'next/link';
 import { ethers } from 'ethers';
 import ThemeToggle from '@/components/ThemeToggle';
+import PartySymbol from '@/components/PartySymbol';
 
 import contractArtifact from '@/lib/contracts/VotingV3.json';
 
@@ -245,9 +246,7 @@ export default function PublicElectionDetailPage() {
                     }`}>
                       <div className="flex justify-between items-start mb-4 relative z-10">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-surface-strong border border-hairline flex items-center justify-center text-lg overflow-hidden shrink-0">
-                            {c.symbol ? c.symbol : <User size={18} className="text-muted" />}
-                          </div>
+                          <PartySymbol symbol={c.symbol} name={c.name} size="md" />
                           <div>
                             <h3 className="font-semibold text-ink text-sm leading-tight">{c.name}</h3>
                             <p className="text-[11px] text-body mt-0.5">{c.party}</p>

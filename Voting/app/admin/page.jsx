@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { Button } from '@fluentui/react-components';
 import { useWallet } from '@/context/WalletContext';
 import {
   Shield, Building2, BatteryCharging, RefreshCw, LogOut,
@@ -12,7 +13,31 @@ import ElectionResults from '@/components/ElectionResults';
 import VoterAnalytics from '@/components/VoterAnalytics';
 import ThemeToggle from '@/components/ThemeToggle';
 
-const APPROVAL_THRESHOLD = 2;
+/** Guardians required to approve an election go-live request (1-of-N). */
+const ELECTION_GO_LIVE_APPROVAL_THRESHOLD = 1;
+
+const BADGE_GREEN = 'bg-green-50 text-green-700 border-green-200 dark:bg-green-950/40 dark:text-green-300 dark:border-green-800';
+const BADGE_AMBER = 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800';
+const BADGE_BLUE = 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800';
+const BADGE_RED = 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800';
+const BADGE_PURPLE = 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800';
+const BADGE_EMERALD = 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800';
+const BADGE_INDIGO = 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800';
+
+const PHASE_BADGES = {
+  1: BADGE_GREEN,
+  2: BADGE_BLUE,
+  0: BADGE_AMBER,
+};
+
+const INPUT_CLASS =
+  'w-full bg-canvas border border-hairline rounded-lg px-3 py-2.5 text-sm text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition';
+
+function getNetworkBadgeClass(name) {
+  if (name.includes('Sepolia')) return BADGE_PURPLE;
+  if (name.includes('Hardhat')) return BADGE_BLUE;
+  return BADGE_AMBER;
+}
 
 const TABS = [
   { id: 'approvals', label: 'Elections approvals', icon: Clock },
@@ -24,7 +49,9 @@ const TABS = [
 
 function Toast({ type, msg }) {
   const isErr = type === 'error';
-  const bg = isErr ? 'bg-red-50 border-red-200 text-red-700' : 'bg-green-50 border-green-200 text-green-700';
+  const bg = isErr
+    ? 'bg-red-50 border-red-200 text-red-700 dark:bg-red-950/40 dark:border-red-800 dark:text-red-300'
+    : 'bg-green-50 border-green-200 text-green-700 dark:bg-green-950/40 dark:border-green-800 dark:text-green-300';
   const Icon = isErr ? AlertCircle : CheckCircle;
   return (
     <div className={`flex items-start gap-2.5 border rounded-lg p-3.5 mb-4 text-sm ${bg}`}>
@@ -97,10 +124,10 @@ function ApprovalsTab({ account }) {
       <div className="flex items-center justify-between border-b border-hairline pb-4">
         <div>
           <h3 className="text-lg font-semibold text-ink">Pending Approvals</h3>
-          <p className="text-xs text-body mt-0.5">Guardians must co-sign requests to transition elections live.</p>
+          <p className="text-xs text-body mt-0.5">One guardian approval transitions an election from Registration to live voting.</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={handleWipeData} title="Wipe all election data" className="flex items-center gap-1.5 text-xs text-red-600 hover:text-red-700 border border-red-200 px-3 py-1.5 rounded-full bg-red-50/50 hover:bg-red-100/50 cursor-pointer">
+          <button onClick={handleWipeData} title="Wipe all election data" className="flex items-center gap-1.5 text-xs text-red-600 hover:text-red-700 dark:text-red-300 dark:hover:text-red-200 border border-red-200 dark:border-red-800 px-3 py-1.5 rounded-full bg-red-50/50 hover:bg-red-100/50 dark:bg-red-950/30 dark:hover:bg-red-950/50 cursor-pointer">
             <Trash2 size={12} /> Wipe Data
           </button>
           <button onClick={load} className="flex items-center gap-1.5 text-xs text-body hover:text-ink border border-hairline px-3 py-1.5 rounded-full bg-canvas cursor-pointer">
@@ -122,7 +149,11 @@ function ApprovalsTab({ account }) {
       ) : (
         <div className="space-y-4">
           {elections.map((e) => {
-            const hasApproved = e.approvedBy?.some(addr => addr.toLowerCase() === account.toLowerCase());
+            const approvedBy = e.approvedBy?.length
+              ? e.approvedBy
+              : (e.guardianApprovedBy ? [e.guardianApprovedBy] : []);
+            const approvalsCount = e.approvalsCount ?? approvedBy.length;
+            const hasApproved = approvedBy.some(addr => addr.toLowerCase() === account.toLowerCase());
             return (
               <div key={e._id || e.id} className="bg-canvas border border-hairline rounded-xl p-5 shadow-sm space-y-4">
                 <div className="flex justify-between items-start">
@@ -132,15 +163,15 @@ function ApprovalsTab({ account }) {
                     <p className="text-muted text-[10px] mt-1 uppercase font-semibold">Org Slug: {e.orgSlug} · Ballot ID: {e.id}</p>
                   </div>
                   <span className="text-xs font-mono font-semibold bg-surface-strong px-2.5 py-1 rounded-full text-ink">
-                    Approvals: {e.approvalsCount || 0} / {APPROVAL_THRESHOLD}
+                    Approvals: {approvalsCount} / {ELECTION_GO_LIVE_APPROVAL_THRESHOLD}
                   </span>
                 </div>
 
-                {e.approvedBy?.length > 0 && (
+                {approvedBy.length > 0 && (
                   <div className="bg-surface-soft p-3 rounded-lg border border-hairline">
                     <p className="text-[10px] font-semibold text-body uppercase tracking-wider mb-1.5">Approved Guardians</p>
                     <div className="space-y-1 font-mono text-[10px] text-body">
-                      {e.approvedBy.map((addr, i) => (
+                      {approvedBy.map((addr, i) => (
                         <div key={i} className="flex items-center gap-1">
                           <CheckCircle2 size={10} className="text-primary" />
                           <span>{addr}</span>
@@ -156,18 +187,19 @@ function ApprovalsTab({ account }) {
                       <CheckCircle2 size={13} /> Signed by You
                     </span>
                   ) : (
-                    <button
+                    <Button
+                      appearance="primary"
                       onClick={() => handleAction(e.id, 'approve')}
                       disabled={actioning === e.id}
-                      className="bg-primary hover:bg-primary-active text-white text-xs font-semibold px-4 py-2 rounded-full cursor-pointer transition shadow-sm"
+                      size="small"
                     >
-                      {actioning === e.id ? <Loader2 size={12} className="animate-spin" /> : 'Co-sign Release'}
-                    </button>
+                      {actioning === e.id ? 'Signing…' : 'Co-sign Release'}
+                    </Button>
                   )}
                   <button
                     onClick={() => handleAction(e.id, 'reject')}
                     disabled={actioning === e.id}
-                    className="border border-red-250 hover:bg-red-50 text-semantic-down text-xs font-semibold px-4 py-2 rounded-full cursor-pointer transition"
+                    className="border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-950/30 text-semantic-down text-xs font-semibold px-4 py-2 rounded-full cursor-pointer transition"
                   >
                     Reject Ballot
                   </button>
@@ -236,11 +268,7 @@ function ResultsTab({ slug }) {
                 <div className="flex justify-between items-start gap-2">
                   <h4 className="font-semibold text-ink text-sm leading-snug">{e.title}</h4>
                   <span className={`text-[8px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full shrink-0 border ${
-                    e.phase === 1
-                      ? 'bg-green-50 text-green-700 border-green-200'
-                      : e.phase === 2
-                      ? 'bg-blue-50 text-blue-700 border-blue-200'
-                      : 'bg-amber-50 text-amber-700 border-amber-200'
+                    PHASE_BADGES[e.phase] ?? BADGE_AMBER
                   }`}>
                     {e.phase === 1 ? 'Live' : e.phase === 2 ? 'Ended' : 'Setup'}
                   </span>
@@ -379,7 +407,7 @@ function OrgsTab() {
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-2">
                       <span className={`text-xs px-2.5 py-0.5 rounded-full border font-semibold ${
-                        o.verified ? 'bg-green-50 text-green-700 border-green-200' : 'bg-amber-50 text-amber-700 border-amber-200'
+                        o.verified ? BADGE_GREEN : BADGE_AMBER
                       }`}>
                         {o.verified ? 'Verified' : 'Pending Approval'}
                       </span>
@@ -439,21 +467,21 @@ function GasTab() {
     const bal = parseFloat(balanceStr || '0');
     if (bal >= 0.1) {
       return (
-        <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200">
+        <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full border ${BADGE_EMERALD}`}>
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
           Healthy Reserve
         </span>
       );
     } else if (bal > 0.02) {
       return (
-        <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full border bg-amber-50 text-amber-700 border-amber-200">
+        <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full border ${BADGE_AMBER}`}>
           <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
           Low Reserve
         </span>
       );
     } else {
       return (
-        <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full border bg-red-50 text-red-700 border-red-200">
+        <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full border ${BADGE_RED}`}>
           <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
           Action Required
         </span>
@@ -724,7 +752,7 @@ function GovTab() {
                 value={newImpl}
                 onChange={(e) => setNewImpl(e.target.value)}
                 disabled={submitting}
-                className="flex-1 bg-canvas border border-hairline rounded-full px-4 py-2.5 text-xs text-ink focus:outline-none focus:border-primary transition"
+                className={`flex-1 ${INPUT_CLASS} rounded-full text-xs`}
               />
               <button
                 type="submit"
@@ -751,15 +779,15 @@ function GovTab() {
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-ink">Proposal #{p.id}</span>
                         {p.executed ? (
-                          <span className="text-[10px] bg-green-50 border border-green-200 text-green-700 font-semibold px-2 py-0.5 rounded-full">
+                          <span className={`text-[10px] border font-semibold px-2 py-0.5 rounded-full ${BADGE_GREEN}`}>
                             Executed (Logic Upgraded)
                           </span>
                         ) : p.approvals >= 2 ? (
-                          <span className="text-[10px] bg-indigo-50 border border-indigo-200 text-indigo-700 font-semibold px-2 py-0.5 rounded-full animate-pulse">
+                          <span className={`text-[10px] border font-semibold px-2 py-0.5 rounded-full animate-pulse ${BADGE_INDIGO}`}>
                             Ready to Execute
                           </span>
                         ) : (
-                          <span className="text-[10px] bg-amber-50 border border-amber-200 text-amber-700 font-semibold px-2 py-0.5 rounded-full">
+                          <span className={`text-[10px] border font-semibold px-2 py-0.5 rounded-full ${BADGE_AMBER}`}>
                             Pending Consensuses ({p.approvals}/2)
                           </span>
                         )}
@@ -958,7 +986,7 @@ export default function AdminDashboardPage() {
         <div className="p-4 border-t border-hairline">
           <button
             onClick={handleLogout}
-            className="w-full flex items-center gap-2.5 px-4 py-3 rounded-full text-sm text-semantic-down hover:bg-red-50 transition-all font-semibold cursor-pointer border border-transparent hover:border-red-100"
+            className="w-full flex items-center gap-2.5 px-4 py-3 rounded-full text-sm text-semantic-down hover:bg-red-50 dark:hover:bg-red-950/30 transition-all font-semibold cursor-pointer border border-transparent hover:border-red-100 dark:hover:border-red-900"
           >
             <LogOut size={15} />
             <span>Close Session</span>
@@ -978,7 +1006,7 @@ export default function AdminDashboardPage() {
           <ThemeToggle />
           <button
             onClick={handleLogout}
-            className="flex items-center gap-1 text-xs text-semantic-down border border-red-200 bg-red-50/50 px-2.5 py-1.5 rounded-full font-semibold cursor-pointer"
+            className="flex items-center gap-1 text-xs text-semantic-down border border-red-200 bg-red-50/50 dark:bg-red-950/30 dark:border-red-800 px-2.5 py-1.5 rounded-full font-semibold cursor-pointer"
           >
             <LogOut size={11} /> Out
           </button>
@@ -1004,21 +1032,15 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* Main Container */}
-      <main className="flex-1 overflow-auto bg-canvas">
+      <main className="flex-1 overflow-auto bg-canvas min-h-0">
         {/* Breadcrumb Header */}
         <div className="border-b border-hairline bg-surface-soft/40 px-6 sm:px-10 py-5 flex items-center justify-between gap-3">
           <div className="min-w-0">
             <h1 className="text-ink font-semibold text-lg">Aegis Guardian Console</h1>
             <p className="text-body text-xs truncate mt-0.5">Multi-Signature Consensus Node Administration</p>
           </div>
-          <div className="flex items-center gap-3 font-sans">
-            <span className={`text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-full border ${
-              networkName === 'Sepolia Testnet'
-                ? 'bg-purple-50 text-purple-700 border-purple-200'
-                : networkName === 'Hardhat Local'
-                ? 'bg-blue-50 text-blue-700 border-blue-200'
-                : 'bg-amber-50 text-amber-700 border-amber-200'
-            }`}>
+          <div className="flex items-center gap-3 font-sans shrink-0">
+            <span className={`hidden sm:inline-flex text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-full border max-w-[220px] truncate ${getNetworkBadgeClass(networkName)}`} title={networkName}>
               📡 {networkName}
             </span>
             <ThemeToggle />

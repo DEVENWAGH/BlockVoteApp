@@ -31,11 +31,17 @@ export async function GET(req) {
     const adminMap = {};
     for (const a of admins) adminMap[String(a._id)] = a;
 
+    const GO_LIVE_APPROVAL_THRESHOLD = 1;
+
     const enriched = elections.map(e => {
       const admin = e.createdBy ? adminMap[String(e.createdBy)] : null;
+      const approvedBy = e.guardianApprovedBy ? [e.guardianApprovedBy] : [];
       return {
         ...e,
         id: e.electionId,
+        approvalThreshold: GO_LIVE_APPROVAL_THRESHOLD,
+        approvedBy,
+        approvalsCount: approvedBy.length,
         org: {
           name: admin?.name || 'Admin',
           email: admin?.email || '',
