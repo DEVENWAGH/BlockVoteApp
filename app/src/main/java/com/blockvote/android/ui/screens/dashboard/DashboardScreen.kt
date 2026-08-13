@@ -35,6 +35,7 @@ import com.blockvote.android.ui.theme.BlockVoteTheme
 @Composable
 fun DashboardScreen(
     onNavigateToElection: (String) -> Unit,
+    onNavigateToVote: () -> Unit = {},
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
     val elections by viewModel.elections.collectAsState()
@@ -47,9 +48,17 @@ fun DashboardScreen(
     ) {
         Spacer(modifier = Modifier.height(24.dp))
         SecurityShieldHeader()
-        
-        Spacer(modifier = Modifier.height(32.dp))
-        
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        com.blockvote.android.ui.components.PrimaryGradientButton(
+            text = "Open Secure Voter Portal",
+            onClick = onNavigateToVote,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(28.dp))
+
         Text(
             text = "Active Elections",
             style = MaterialTheme.typography.titleLarge,
@@ -170,6 +179,6 @@ fun RecentActivityList(elections: List<Election>) {
 @Composable
 fun DashboardScreenPreview() {
     BlockVoteTheme {
-        DashboardScreen(onNavigateToElection = {})
+        DashboardScreen(onNavigateToElection = {}, onNavigateToVote = {})
     }
 }

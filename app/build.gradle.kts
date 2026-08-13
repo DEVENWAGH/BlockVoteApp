@@ -19,16 +19,30 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Physical device via `adb reverse tcp:3000 tcp:3000` → host Next.js.
+        // (Wi-Fi alternative: http://10.151.108.30:3000/)
+        buildConfigField("String", "API_BASE_URL", "\"http://127.0.0.1:3000/\"")
+        buildConfigField("boolean", "USE_DEMO_DATA", "false")
     }
 
     buildTypes {
+        debug {
+            // Talk to real Voting Next.js backend (no fake election data).
+            buildConfigField("boolean", "USE_DEMO_DATA", "false")
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            buildConfigField("boolean", "USE_DEMO_DATA", "false")
         }
+    }
+    buildFeatures {
+        compose = true
+        buildConfig = true
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -36,9 +50,6 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
-    }
-    buildFeatures {
-        compose = true
     }
 }
 
@@ -96,5 +107,4 @@ dependencies {
     implementation(libs.hilt.navigation.compose)
     "ksp"(libs.hilt.compiler)
     "ksp"(libs.androidx.room.compiler)
-    "ksp"(libs.moshi.kotlin.codegen)
 }

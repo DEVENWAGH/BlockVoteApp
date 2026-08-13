@@ -1,0 +1,27 @@
+import mongoose from 'mongoose';
+
+const VoterSchema = new mongoose.Schema({
+  electionId:    { type: String, required: true, index: true },
+
+  name:          { type: String, required: true, trim: true },
+  email:         { type: String, required: true, lowercase: true, trim: true },
+  phone:         { type: String, default: '' },
+  gender:        { type: String, default: '' },
+  age:           { type: Number, default: null },
+  memberId:      { type: String, default: '' },
+
+  nullifierHash: { type: String, default: '' },
+  status:        { type: String, enum: ['pending', 'registered', 'rejected'], default: 'pending' },
+  registeredAt:  { type: Date },
+  onChainTxHash: { type: String, default: '' },
+  rejectionReason: { type: String, default: '' },
+
+  /** Invite email with app deep link was sent */
+  inviteSentAt:  { type: Date, default: null },
+}, { timestamps: true });
+
+VoterSchema.index({ electionId: 1, email: 1 }, { unique: true });
+VoterSchema.index({ electionId: 1, status: 1 });
+VoterSchema.index({ electionId: 1, nullifierHash: 1 });
+
+export default mongoose.models.Voter || mongoose.model('Voter', VoterSchema);

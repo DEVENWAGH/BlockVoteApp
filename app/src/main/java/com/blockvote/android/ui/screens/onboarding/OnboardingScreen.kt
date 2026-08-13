@@ -33,6 +33,7 @@ import com.blockvote.android.ui.theme.ElectricCyan
 @Composable
 fun OnboardingScreen(
     onNavigateToDashboard: () -> Unit,
+    onNavigateToVote: () -> Unit = {},
     viewModel: OnboardingViewModel = hiltViewModel()
 ) {
     val authState by viewModel.authState.collectAsState()
@@ -52,28 +53,28 @@ fun OnboardingScreen(
             tint = ElectricCyan,
             modifier = Modifier.size(120.dp)
         )
-        
+
         Spacer(modifier = Modifier.height(24.dp))
-        
+
         Text(
             text = "BlockVote",
             style = MaterialTheme.typography.displayMedium,
             color = MaterialTheme.colorScheme.onBackground,
             fontWeight = FontWeight.Black
         )
-        
+
         Text(
-            text = "Secure, Immutable, Decentralized Voting.",
+            text = "Gasless on-chain voting with face + email OTP. No MetaMask required.",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(horizontal = 32.dp)
         )
-        
-        Spacer(modifier = Modifier.height(64.dp))
-        
+
+        Spacer(modifier = Modifier.height(48.dp))
+
         PrimaryGradientButton(
-            text = "Verify Identity & Unlock Wallet",
+            text = "Unlock & Open Dashboard",
             onClick = {
                 (context as? FragmentActivity)?.let { activity ->
                     viewModel.authenticate(activity, onNavigateToDashboard)
@@ -82,7 +83,19 @@ fun OnboardingScreen(
             modifier = Modifier.fillMaxWidth(),
             icon = androidx.compose.ui.res.painterResource(id = R.drawable.ic_fingerprint)
         )
-        
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        PrimaryGradientButton(
+            text = "Start Voting Portal",
+            onClick = {
+                (context as? FragmentActivity)?.let { activity ->
+                    viewModel.authenticate(activity, onNavigateToVote)
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        )
+
         if (authState is OnboardingViewModel.AuthState.Error) {
             Spacer(modifier = Modifier.height(16.dp))
             Text(
@@ -98,6 +111,6 @@ fun OnboardingScreen(
 @Composable
 fun OnboardingScreenPreview() {
     BlockVoteTheme {
-        OnboardingScreen(onNavigateToDashboard = {})
+        OnboardingScreen(onNavigateToDashboard = {}, onNavigateToVote = {})
     }
 }

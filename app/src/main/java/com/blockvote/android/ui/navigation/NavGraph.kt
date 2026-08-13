@@ -11,6 +11,7 @@ import com.blockvote.android.ui.screens.dashboard.DashboardScreen
 import com.blockvote.android.ui.screens.detail.ElectionDetailScreen
 import com.blockvote.android.ui.screens.onboarding.OnboardingScreen
 import com.blockvote.android.ui.screens.receipt.ReceiptScreen
+import com.blockvote.android.ui.screens.vote.VotePortalScreen
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -20,20 +21,27 @@ sealed interface Route : NavKey {
     @Serializable
     data object Dashboard : Route
     @Serializable
+    data class VotePortal(val electionId: String = "") : Route
+    @Serializable
     data class ElectionDetail(val electionId: String) : Route
     @Serializable
     data class Receipt(val receiptId: String) : Route
 }
 
 @Composable
-fun BlockVoteNavGraph() {
-    val backStack = remember { mutableStateListOf<NavKey>(Route.Onboarding) }
+fun BlockVoteNavGraph(deepLinkElectionId: String? = null) {
+    val start: NavKey = if (!deepLinkElectionId.isNullOrBlank()) {
+        Route.VotePortal(deepLinkElectionId)
+    } else {
+        Route.Onboarding
+    }
+    val backStack = remember(deepLinkElectionId) { mutableStateListOf(start) }
 
     NavDisplay(
         backStack = backStack,
-        onBack = { 
+        onBack = {
             if (backStack.size > 1) {
-                backStack.removeLastOrNull() 
+                backStack.removeLastOrNull()
             }
         },
         entryProvider = { key ->
@@ -43,6 +51,10 @@ fun BlockVoteNavGraph() {
                         onNavigateToDashboard = {
                             backStack.clear()
                             backStack.add(Route.Dashboard)
+                        },
+                        onNavigateToVote = {
+                            backStack.clear()
+                            backStack.add(Route.VotePortal())
                         }
                     )
                 }
@@ -50,6 +62,22 @@ fun BlockVoteNavGraph() {
                     DashboardScreen(
                         onNavigateToElection = { electionId ->
                             backStack.add(Route.ElectionDetail(electionId))
+                        },
+                        onNavigateToVote = {
+                            backStack.add(Route.VotePortal())
+                        }
+                    )
+                }
+                is Route.VotePortal -> NavEntry(key) {
+                    VotePortalScreen(
+                        initialElectionId = key.electionId.ifBlank { null },
+                        onFinished = {
+                            if (backStack.size > 1) {
+                                backStack.removeLastOrNull()
+                            } else {
+                                backStack.clear()
+                                backStack.add(Route.Dashboard)
+                            }
                         }
                     )
                 }
