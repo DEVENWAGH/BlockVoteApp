@@ -40,19 +40,41 @@ Organizations are **removed**. Admins own elections via `createdBy`. Voters are 
 1. `GET /api/elections/{electionId}` — must be phase=1 + guardianApproved  
 2. `GET /api/org/admin/elections/{electionId}/candidates` (legacy path; slug ignored)  
 3. `GET /api/voters/lookup?email=&electionId=` → `nullifierHash`  
-4. `POST /api/biometric/verify`  
+4. **App liveness scan** — front camera; user stays in oval; phone rotation tracked via sensors (~320° progress bar); ML Kit blocks if another person appears; auto-capture then `POST /api/biometric/verify` (AWS Rekognition)  
 5. `POST /api/auth/send-otp` `{ email, electionId }`  
 6. `POST /api/auth/verify-otp` + `x-biometric-token` → relay cast  
 7. `GET /api/audit/verify?txHash=`
 
 Nullifier: `keccak256(email:SERVER_IDENTITY_SECRET)` (no org).
 
+Identity for now: **email roster + face biometric + OTP**. DigiLocker is a future plan (partner/GST required).
+
+## Local MongoDB (Compass)
+
+Scripts do **not** start Docker Mongo. Run local `mongod` and connect Compass to `mongodb://127.0.0.1:27017`. Set in `Voting/.env`:
+
+```env
+MONGODB_URI=mongodb://127.0.0.1:27017/blockvote
+```
+
 ## Configure API base URL
 
 In `app/build.gradle.kts`:
 
-- Emulator → `http://10.0.2.2:3000/`  
-- Device → LAN IP  
+- Emulator → `http://10.0.2.2:3000/` (`-PapiBaseUrl=...`)
+- Device → `adb reverse` + `http://127.0.0.1:3000/` or LAN IP  
 - Production → your Voting host  
 
 Set `USE_DEMO_DATA=false` to hit real APIs.
+
+## Dev scripts
+
+```powershell
+# Terminal 1 — backend (Mongo must already be running for Compass)
+.\scripts\dev-all.ps1 server
+
+# Terminal 2 — app
+.\scripts\dev-all.ps1 emulator
+# or
+.\scripts\dev-all.ps1 device
+```

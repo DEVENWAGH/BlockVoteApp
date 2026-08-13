@@ -7,11 +7,75 @@
 import { Resend } from 'resend';
 
 let _resend = null;
+let _resendKey = null;
+
+/** Resend blocks placeholder domains like example.com — see resend.com/docs/dashboard/emails/testing */
+const BLOCKED_RECIPIENT_DOMAINS = new Set([
+  'example.com',
+  'example.org',
+  'example.net',
+  'test.com',
+]);
+
+function isBlockedTestRecipient(email) {
+  const domain = String(email).split('@')[1]?.toLowerCase();
+  return BLOCKED_RECIPIENT_DOMAINS.has(domain);
+}
 
 export function getResendClient() {
-  if (_resend) return _resend;
-  _resend = new Resend(process.env.RESEND_API_KEY);
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    throw new Error('RESEND_API_KEY is not set');
+  }
+  if (_resend && _resendKey === apiKey) return _resend;
+  _resendKey = apiKey;
+  _resend = new Resend(apiKey);
   return _resend;
+}
+
+function getFromAddress() {
+  return process.env.RESEND_FROM || 'Block Vote <onboarding@resend.dev>';
+}
+
+function resolveRecipient(to) {
+  if (isBlockedTestRecipient(to)) {
+    const msg = `Invalid recipient ${to}: Resend blocks placeholder domains like example.com. Use a real email or a Resend test address (delivered@resend.dev).`;
+    if (process.env.NODE_ENV === 'development') {
+      console.warn(`[mailer] ${msg}`);
+      return null;
+    }
+    throw new Error(msg);
+  }
+  return process.env.RESEND_DEV_REDIRECT || to;
+}
+
+async function sendEmail({ to, subject, html, text, logLabel = 'email' }) {
+  const actualTo = resolveRecipient(to);
+  if (!actualTo) return { skipped: true };
+
+  const from = getFromAddress();
+  const actualSubject = process.env.RESEND_DEV_REDIRECT && actualTo !== to
+    ? `[→ ${to}] ${subject}`
+    : subject;
+
+  const { data, error } = await getResendClient().emails.send({
+    from,
+    to: actualTo,
+    subject: actualSubject,
+    html,
+    text,
+  });
+
+  if (error) {
+    const keyHint = process.env.RESEND_API_KEY?.slice(0, 8) ?? 'missing';
+    throw new Error(`${error.message} (from=${from}, key=${keyHint}...)`);
+  }
+
+  if (process.env.RESEND_DEV_REDIRECT && actualTo !== to) {
+    console.log(`[mailer] ${logLabel} for ${to} redirected to ${actualTo} (RESEND_DEV_REDIRECT)`);
+  }
+
+  return { id: data?.id };
 }
 
 export function getTransporter() {
@@ -86,20 +150,24 @@ export async function sendOTPEmail(to, otp, purpose = 'vote', label = 'Block Vot
     </html>
   `;
 
-  const from = process.env.RESEND_FROM || 'Block Vote <onboarding@resend.dev>';
-  // If RESEND_DEV_REDIRECT is set, redirect all emails to that address
-  // (used on Resend free plan without a domain, where only your own email can receive)
-  const actualTo = process.env.RESEND_DEV_REDIRECT || to;
-  const actualSubject = process.env.RESEND_DEV_REDIRECT && actualTo !== to
-    ? `[→ ${to}] ${subject}`
-    : subject;
+  const text = [
+    'BLOCK VOTE',
+    '',
+    'Secure Blockchain Voting',
+    '',
+    purpose === 'vote'
+      ? `You requested to cast your vote in ${label} via the Block Vote app.`
+      : 'You requested to log in to the Block Vote admin site.',
+    'Use the OTP below. It expires in 5 minutes.',
+    '',
+    `Your OTP: ${otp}`,
+    '',
+    "If you didn't request this, ignore this email. Do not share this OTP with anyone.",
+  ].join('\n');
 
   try {
-    const { error } = await getResendClient().emails.send({ from, to: actualTo, subject: actualSubject, html });
-    if (error) throw new Error(error.message);
-    if (process.env.RESEND_DEV_REDIRECT && actualTo !== to) {
-      console.log(`[mailer] Email for ${to} redirected to ${actualTo} (RESEND_DEV_REDIRECT)`);
-    }
+    const result = await sendEmail({ to, subject, html, text, logLabel: 'OTP email' });
+    if (result.skipped) return;
   } catch (err) {
     console.error(`[mailer] Failed to send email to ${to}:`, err);
     if (process.env.NODE_ENV === 'development') {
@@ -195,18 +263,20 @@ export async function sendVoteReceiptEmail(
     return;
   }
 
-  const from = process.env.RESEND_FROM || 'Block Vote <onboarding@resend.dev>';
-  const actualTo = process.env.RESEND_DEV_REDIRECT || to;
-  const actualSubject = process.env.RESEND_DEV_REDIRECT && actualTo !== to
-    ? `[→ ${to}] ${subject}`
-    : subject;
+  const text = [
+    'Vote Cast Successfully',
+    '',
+    `Your vote in ${electionTitle} has been securely recorded on the blockchain.`,
+    'For your privacy, the candidate you voted for is not included in this receipt.',
+    '',
+    `Transaction Hash: ${txHash}`,
+    '',
+    `Verify your vote: ${verifyUrl}`,
+  ].join('\n');
 
   try {
-    const { error } = await getResendClient().emails.send({ from, to: actualTo, subject: actualSubject, html });
-    if (error) throw new Error(error.message);
-    if (process.env.RESEND_DEV_REDIRECT && actualTo !== to) {
-      console.log(`[mailer] Receipt for ${to} redirected to ${actualTo} (RESEND_DEV_REDIRECT)`);
-    }
+    const result = await sendEmail({ to, subject, html, text, logLabel: 'Receipt' });
+    if (result.skipped) return;
   } catch (err) {
     console.error(`[mailer] Failed to send receipt email to ${to}:`, err);
     if (process.env.NODE_ENV === 'development') {
@@ -294,15 +364,18 @@ export async function sendVoteInviteEmail(
     </html>
   `;
 
-  const from = process.env.RESEND_FROM || 'Block Vote <onboarding@resend.dev>';
-  const actualTo = process.env.RESEND_DEV_REDIRECT || to;
-  const actualSubject = process.env.RESEND_DEV_REDIRECT && actualTo !== to
-    ? `[→ ${to}] ${subject}`
-    : subject;
+  const text = [
+    `You're invited to vote in ${electionTitle}`,
+    '',
+    `Hi ${voterName}, you are registered for ${electionTitle}.`,
+    'Voting is only available in the Block Vote mobile app.',
+    '',
+    `Open app & cast vote: ${inviteUrl}`,
+  ].join('\n');
 
   try {
-    const { error } = await getResendClient().emails.send({ from, to: actualTo, subject: actualSubject, html });
-    if (error) throw new Error(error.message);
+    const result = await sendEmail({ to, subject, html, text, logLabel: 'Invite' });
+    if (result.skipped) return;
   } catch (err) {
     console.error(`[mailer] Failed to send invite email to ${to}:`, err);
     if (process.env.NODE_ENV === 'development') {

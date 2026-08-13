@@ -16,10 +16,10 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 enum class VoteStep {
-    /** Paste / deep-link election id */
     ELECTION,
     EMAIL,
-    FACE,
+    /** Front camera rotation scan + AWS face verify (single step). */
+    LIVENESS,
     CANDIDATE,
     OTP,
     SUCCESS
@@ -39,7 +39,9 @@ data class VoteUiState(
     val onChainVerified: Boolean? = null,
     val loading: Boolean = false,
     val error: String? = null,
-    val revealCandidate: Boolean = false
+    val revealCandidate: Boolean = false,
+    /** Bumped when AWS face verify fails so the camera unlocks for recapture. */
+    val livenessRetryToken: Int = 0
 )
 
 @HiltViewModel
@@ -122,7 +124,7 @@ class VoteViewModel @Inject constructor(
             repository.lookupVoter(email, election.id)
                 .onSuccess { voter ->
                     _state.update {
-                        it.copy(loading = false, voter = voter, step = VoteStep.FACE)
+                        it.copy(loading = false, voter = voter, step = VoteStep.LIVENESS)
                     }
                 }
                 .onFailure { e ->
@@ -132,6 +134,8 @@ class VoteViewModel @Inject constructor(
                 }
         }
     }
+
+    fun onLivenessCaptured(imageDataUrl: String) = onFaceVerified(imageDataUrl)
 
     fun onFaceVerified(imageDataUrl: String) {
         val s = _state.value
@@ -162,10 +166,28 @@ class VoteViewModel @Inject constructor(
                     }
                 }
                 .onFailure { e ->
+                    val msg = e.message ?: "Face verification failed"
                     _state.update {
-                        it.copy(loading = false, error = e.message ?: "Face verification failed")
+                        it.copy(
+                            loading = false,
+                            error = msg,
+                            step = VoteStep.LIVENESS,
+                            livenessRetryToken = it.livenessRetryToken + 1
+                        )
                     }
                 }
+        }
+    }
+
+    /** Unlock camera for another photo after AWS rejection (glasses, lighting, etc.). */
+    fun retryLivenessCapture() {
+        _state.update {
+            it.copy(
+                loading = false,
+                error = null,
+                step = VoteStep.LIVENESS,
+                livenessRetryToken = it.livenessRetryToken + 1
+            )
         }
     }
 
@@ -174,6 +196,17 @@ class VoteViewModel @Inject constructor(
     }
 
     fun setFaceError(message: String) {
+        _state.update {
+            it.copy(
+                loading = false,
+                error = message,
+                livenessRetryToken = it.livenessRetryToken + 1
+            )
+        }
+    }
+
+    /** Show a scan warning without unlocking recapture (e.g. extra person in frame). */
+    fun showLivenessMessage(message: String) {
         _state.update { it.copy(loading = false, error = message) }
     }
 
@@ -245,8 +278,8 @@ class VoteViewModel @Inject constructor(
         _state.update { s ->
             when (s.step) {
                 VoteStep.EMAIL -> s.copy(step = VoteStep.ELECTION, error = null)
-                VoteStep.FACE -> s.copy(step = VoteStep.EMAIL, error = null)
-                VoteStep.CANDIDATE -> s.copy(step = VoteStep.FACE, error = null)
+                VoteStep.LIVENESS -> s.copy(step = VoteStep.EMAIL, error = null)
+                VoteStep.CANDIDATE -> s.copy(step = VoteStep.LIVENESS, error = null)
                 VoteStep.OTP -> s.copy(step = VoteStep.CANDIDATE, error = null)
                 else -> s
             }

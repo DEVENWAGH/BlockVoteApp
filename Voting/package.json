@@ -4,8 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -k -n NODE,NEXT -c cyan,green \"yarn hardhat:node\" \"node scripts/wait-and-deploy.js && next dev\"",
-    "dev:next-only": "next dev",
+    "dev": "concurrently -k -n NODE,NEXT -c cyan,green \"yarn hardhat:node\" \"node scripts/wait-and-deploy.js && next dev -H 0.0.0.0 -p 3000\"",
+    "dev:next-only": "next dev -H 0.0.0.0 -p 3000",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

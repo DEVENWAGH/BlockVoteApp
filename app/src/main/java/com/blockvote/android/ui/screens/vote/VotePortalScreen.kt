@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.blockvote.android.domain.model.Candidate
 import com.blockvote.android.domain.model.Election
+import com.blockvote.android.ui.components.CameraScanMode
 import com.blockvote.android.ui.components.FaceCaptureCamera
 import com.blockvote.android.ui.components.PrimaryGradientButton
 import com.blockvote.android.ui.theme.DeepNavy
@@ -127,7 +128,7 @@ fun VotePortalScreen(
                 when (step) {
                     VoteStep.ELECTION -> ElectionIdStep(state, viewModel)
                     VoteStep.EMAIL -> EmailStep(state, viewModel)
-                    VoteStep.FACE -> FaceStep(state, viewModel)
+                    VoteStep.LIVENESS -> LivenessStep(state, viewModel)
                     VoteStep.CANDIDATE -> CandidateStep(state, viewModel)
                     VoteStep.OTP -> OtpStep(state, viewModel)
                     VoteStep.SUCCESS -> SuccessStep(state, onDone = {
@@ -168,7 +169,7 @@ private fun VoteHeader(state: VoteUiState, onBack: () -> Unit) {
                 text = when (state.step) {
                     VoteStep.ELECTION -> "Open election from invite link"
                     VoteStep.EMAIL -> "Verify registered email"
-                    VoteStep.FACE -> "Liveness + face match"
+                    VoteStep.LIVENESS -> "Rotate scan + face verify"
                     VoteStep.CANDIDATE -> "Select your candidate"
                     VoteStep.OTP -> "Confirm with email OTP"
                     VoteStep.SUCCESS -> "Vote recorded on-chain"
@@ -184,8 +185,8 @@ private fun VoteHeader(state: VoteUiState, onBack: () -> Unit) {
 @Composable
 private fun StepIndicator(step: VoteStep) {
     val steps = listOf(
-        VoteStep.ELECTION, VoteStep.EMAIL,
-        VoteStep.FACE, VoteStep.CANDIDATE, VoteStep.OTP, VoteStep.SUCCESS
+        VoteStep.ELECTION, VoteStep.EMAIL, VoteStep.LIVENESS,
+        VoteStep.CANDIDATE, VoteStep.OTP, VoteStep.SUCCESS
     )
     val index = steps.indexOf(step).coerceAtLeast(0)
     Row(
@@ -260,10 +261,9 @@ private fun EmailStep(state: VoteUiState, viewModel: VoteViewModel) {
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
-private fun FaceStep(state: VoteUiState, viewModel: VoteViewModel) {
+private fun LivenessStep(state: VoteUiState, viewModel: VoteViewModel) {
     val cameraPermission = rememberPermissionState(Manifest.permission.CAMERA)
 
-    // Ask for camera as soon as this step opens
     LaunchedEffect(Unit) {
         if (!cameraPermission.status.isGranted) {
             cameraPermission.launchPermissionRequest()
@@ -272,7 +272,7 @@ private fun FaceStep(state: VoteUiState, viewModel: VoteViewModel) {
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
-            text = "Liveness check: one face, eyes open, no glasses. We do not match against a stored photo.",
+            text = "Hold the phone at arm's length with one hand so the camera sees more of the room. Then rotate slowly to one side. If anyone else appears, the scan restarts.",
             color = Color.White.copy(alpha = 0.75f),
             style = MaterialTheme.typography.bodySmall
         )
@@ -290,15 +290,31 @@ private fun FaceStep(state: VoteUiState, viewModel: VoteViewModel) {
                 style = MaterialTheme.typography.bodySmall
             )
         } else {
-            // Keep preview outside verticalScroll so CameraX gets a real surface size
             FaceCaptureCamera(
+                mode = CameraScanMode.LIVENESS_ROTATE,
                 enabled = !state.loading,
-                onCaptured = viewModel::onFaceVerified,
+                retryToken = state.livenessRetryToken,
+                onCaptured = viewModel::onLivenessCaptured,
                 onError = { msg -> viewModel.setFaceError(msg) },
+                onScanWarning = { msg -> viewModel.showLivenessMessage(msg) },
                 modifier = Modifier.fillMaxWidth()
             )
         }
         ErrorText(state.error)
+        if (!state.error.isNullOrBlank() && !state.loading) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = "Tip: remove glasses/sunglasses, open your eyes, and use brighter light.",
+                color = Color.White.copy(alpha = 0.7f),
+                style = MaterialTheme.typography.labelSmall
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            PrimaryGradientButton(
+                text = "Try again — Recapture",
+                onClick = viewModel::retryLivenessCapture,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
     }
 }
 
