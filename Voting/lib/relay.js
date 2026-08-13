@@ -4,8 +4,7 @@
  * The relay wallet pays ALL gas. Voters have zero blockchain interaction.
  */
 import { ethers } from 'ethers';
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
+import votingArtifact from './contracts/VotingV3.json' with { type: 'json' };
 
 let _provider = null;
 let _relayWallet = null;
@@ -71,7 +70,7 @@ function getRelayWallet() {
 
 function getContract() {
   if (!_contract) {
-    const abi = require('./contracts/VotingV3.json').abi;
+    const abi = votingArtifact.abi;
     const address = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS;
     if (!address) throw new Error('NEXT_PUBLIC_CONTRACT_ADDRESS not set in .env');
     _contract = new ethers.Contract(address, abi, getRelayWallet());
@@ -202,7 +201,7 @@ export async function relayCreateElection(title, description, bannerUrl, startTi
   // Parse the ElectionCreated event to get the bytes32 election ID
   let electionId = null;
   try {
-    const abi = require('./contracts/VotingV1.json').abi;
+    const abi = votingArtifact.abi;
     const iface = new ethers.Interface(abi);
     for (const log of receipt.logs) {
       try {
@@ -258,7 +257,7 @@ export async function getRelayAddress() {
 
 /** Read-only contract for on-chain checks */
 export function getReadContract() {
-  const abi = require('./contracts/VotingV3.json').abi;
+  const abi = votingArtifact.abi;
   const address = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS;
   if (!address) throw new Error('NEXT_PUBLIC_CONTRACT_ADDRESS not set in .env');
   return new ethers.Contract(address, abi, getProvider());
