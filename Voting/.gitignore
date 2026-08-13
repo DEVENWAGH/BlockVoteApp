@@ -48,3 +48,10 @@ next-env.d.ts
 # Hardhat local chain state — persists elections/votes across dev server restarts
 hardhat-state.json
 
+# Vercel MCP deploy artifacts (temporary, do not commit)
+payload-chunk-*.txt
+.deploy-*.json
+.full-deploy-args.json
+.last-deploy-args.json
+.mcp-invoke.json
+

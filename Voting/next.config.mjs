@@ -1,8 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Enable standalone output for Docker deployment
-  output: 'standalone',
+  // Standalone is for Docker/EC2 only — Vercel uses its own serverless output.
+  ...(process.env.VERCEL ? {} : { output: 'standalone' }),
   // Tell Next.js not to bundle these — they run only on the server
   serverExternalPackages: ['mongoose', 'resend'],
   images: {
