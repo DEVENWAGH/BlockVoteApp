@@ -22,16 +22,21 @@ async function main() {
     guardian3 = signers[2]; // Account #2
   } else {
     console.log("   Running on LIVE network: loading keys from .env...");
-    const walletFromEnv = async (envKey, fallback) => {
+    const walletFromEnv = (envKey, label) => {
       const key = process.env[envKey];
-      if (key) return new hre.ethers.Wallet(key, hre.ethers.provider);
-      return fallback;
+      if (!key) {
+        throw new Error(
+          `${envKey} is required for Sepolia deploy (${label}). ` +
+          `Generate a wallet and add the private key to Voting/.env`,
+        );
+      }
+      return new hre.ethers.Wallet(key, hre.ethers.provider);
     };
-    deployer  = await walletFromEnv("DEPLOYER_PRIVATE_KEY",    signers[0]);
-    relay     = await walletFromEnv("ADMIN_RELAY_PRIVATE_KEY", signers[1]);
+    deployer  = walletFromEnv("DEPLOYER_PRIVATE_KEY", "pays deployment gas");
+    relay     = walletFromEnv("ADMIN_RELAY_PRIVATE_KEY", "relay + guardian 1");
     guardian1 = relay;
-    guardian2 = await walletFromEnv("GUARDIAN_1_PRIVATE_KEY",  signers[2]);
-    guardian3 = await walletFromEnv("GUARDIAN_2_PRIVATE_KEY",  signers[3]);
+    guardian2 = walletFromEnv("GUARDIAN_2_PRIVATE_KEY", "guardian 2 of 3");
+    guardian3 = walletFromEnv("GUARDIAN_3_PRIVATE_KEY", "guardian 3 of 3");
   }
 
   console.log("   Deployer  :", deployer.address);
