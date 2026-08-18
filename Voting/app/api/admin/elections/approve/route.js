@@ -8,6 +8,10 @@ import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Election from '@/lib/models/Election';
 import { relayTransitionPhase } from '@/lib/relay';
+import Voter from '@/lib/models/Voter';
+import Admin from '@/lib/models/Admin';
+import { sendVoteInviteEmail } from '@/lib/mailer';
+import { getVoteDeepLink, getVoteInviteUrl, getWebPortalUrl } from '@/lib/appLinks';
 
 export async function POST(req) {
   try {
@@ -62,9 +66,47 @@ export async function POST(req) {
       }
     );
 
+    const adminDoc = electionDoc.createdBy
+      ? await Admin.findById(electionDoc.createdBy).lean()
+      : null;
+    const orgName = adminDoc?.name || 'admin';
+    const inviteUrl = getVoteInviteUrl(String(electionId), {
+      orgName,
+      electionTitle: electionDoc.title,
+    });
+    const portalUrl = getWebPortalUrl(String(electionId), {
+      orgName,
+      electionTitle: electionDoc.title,
+    });
+    const deepLink = getVoteDeepLink(String(electionId));
+
+    const voters = await Voter.find({
+      electionId: String(electionId),
+      status: 'registered',
+      $or: [{ inviteSentAt: null }, { inviteSentAt: { $exists: false } }],
+    }).limit(500);
+
+    let invitesSent = 0;
+    for (const voter of voters) {
+      try {
+        await sendVoteInviteEmail(voter.email, {
+          voterName: voter.name,
+          electionTitle: electionDoc.title,
+          inviteUrl,
+          deepLink,
+          portalUrl,
+        });
+        await Voter.findByIdAndUpdate(voter._id, { inviteSentAt: new Date() });
+        invitesSent++;
+      } catch (inviteErr) {
+        console.warn('[admin/elections/approve] invite failed', voter.email, inviteErr.message);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       txHash,
+      invitesSent,
       message: `Election #${electionId} approved and is now LIVE for voters!`,
     });
   } catch (err) {

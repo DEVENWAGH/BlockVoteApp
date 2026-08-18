@@ -295,6 +295,95 @@ export async function sendVoteReceiptEmail(
 }
 
 /**
+ * Send a password-reset link to an admin.
+ */
+export async function sendPasswordResetEmail(to, { resetUrl }) {
+  const subject = 'Reset your password — Block Vote';
+
+  if (process.env.NODE_ENV === 'development' && process.env.DEV_SKIP_EMAIL === 'true') {
+    console.log(`\n==================================================`);
+    console.log(`[DEV MODE] PASSWORD RESET EMAIL FALLBACK (BYPASS ENABLED)`);
+    console.log(`To: ${to}`);
+    console.log(`Reset URL: ${resetUrl}`);
+    console.log(`==================================================\n`);
+    return;
+  }
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <body style="margin:0;padding:0;background:#0f172a;font-family:Inter,sans-serif;">
+        <table width="100%" cellpadding="0" cellspacing="0">
+          <tr><td align="center" style="padding:40px 20px;">
+            <table width="560" cellpadding="0" cellspacing="0" style="background:#1e293b;border-radius:16px;overflow:hidden;">
+              <tr>
+                <td style="background:linear-gradient(135deg,#0ea5e9,#0369a1);padding:32px;text-align:center;">
+                  <h1 style="margin:0;color:#fff;font-size:24px;font-weight:800;">Block Vote</h1>
+                  <p style="margin:8px 0 0;color:#e0f2fe;font-size:14px;">Password Reset</p>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:40px 36px;">
+                  <p style="margin:0 0 24px;color:#94a3b8;font-size:15px;line-height:1.7;">
+                    We received a request to reset your Block Vote admin password.
+                    Click the button below to choose a new password. This link expires in
+                    <strong style="color:#e2e8f0;">30 minutes</strong>.
+                  </p>
+                  <div style="text-align:center;margin:0 0 24px;">
+                    <a href="${resetUrl}" style="display:inline-block;background:#0ea5e9;color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:12px;font-weight:700;font-size:15px;">
+                      Reset Password
+                    </a>
+                  </div>
+                  <p style="margin:0;color:#64748b;font-size:13px;line-height:1.6;">
+                    If you didn't request this, you can safely ignore this email.<br />
+                    Or open this link directly:<br />
+                    <a href="${resetUrl}" style="color:#7dd3fc;text-decoration:none;word-break:break-all;">${resetUrl}</a>
+                  </p>
+                </td>
+              </tr>
+              <tr>
+                <td style="background:#0f172a;padding:20px 36px;border-top:1px solid #1e293b;">
+                  <p style="margin:0;color:#475569;font-size:12px;text-align:center;">
+                    Block Vote · Admin on web · Vote on mobile
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td></tr>
+        </table>
+      </body>
+    </html>
+  `;
+
+  const text = [
+    'BLOCK VOTE — Password Reset',
+    '',
+    'We received a request to reset your Block Vote admin password.',
+    'Click the link below to choose a new password. It expires in 30 minutes.',
+    '',
+    resetUrl,
+    '',
+    "If you didn't request this, you can safely ignore this email.",
+  ].join('\n');
+
+  try {
+    const result = await sendEmail({ to, subject, html, text, logLabel: 'Password reset' });
+    if (result.skipped) return;
+  } catch (err) {
+    console.error(`[mailer] Failed to send password reset email to ${to}:`, err);
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`\n==================================================`);
+      console.log(`[DEV MODE] PASSWORD RESET EMAIL FALLBACK`);
+      console.log(`To: ${to}`);
+      console.log(`Reset URL: ${resetUrl}`);
+      console.log(`==================================================\n`);
+      return;
+    }
+    throw err;
+  }
+}
+
+/**
  * Invite a registered voter to cast their ballot in the mobile app.
  */
 export async function sendVoteInviteEmail(
@@ -304,9 +393,13 @@ export async function sendVoteInviteEmail(
     electionTitle = 'Election',
     inviteUrl,
     deepLink,
+    portalUrl,
   },
 ) {
   const subject = `Cast your vote — ${electionTitle}`;
+  // Canonical inviteUrl is already in the desired URL format; webPortalUrl is optional.
+  // Do NOT auto-convert legacy /go/* to /portal/*, because you requested no backward support.
+  const webPortalUrl = portalUrl || '';
 
   if (process.env.NODE_ENV === 'development' && process.env.DEV_SKIP_EMAIL === 'true') {
     console.log(`\n==================================================`);
@@ -337,7 +430,8 @@ export async function sendVoteInviteEmail(
                   <p style="margin:0 0 18px;color:#cbd5e1;font-size:15px;line-height:1.7;">
                     Hi ${voterName}, you are registered for
                     <strong style="color:#ffffff;">${electionTitle}</strong>.
-                    Voting is only available in the Block Vote mobile app.
+                    Open the Block Vote Android app for the full surrounding-monitor flow,
+                    or use the web beta on a computer.
                   </p>
                   <div style="text-align:center;margin:0 0 24px;">
                     <a href="${inviteUrl}" style="display:inline-block;background:#0ea5e9;color:#ffffff;text-decoration:none;padding:14px 22px;border-radius:12px;font-weight:700;">
@@ -348,12 +442,17 @@ export async function sendVoteInviteEmail(
                     If the button does not open the app, paste this link on your phone:<br />
                     <a href="${inviteUrl}" style="color:#7dd3fc;text-decoration:none;word-break:break-all;">${inviteUrl}</a>
                   </p>
+                  ${webPortalUrl ? `
+                  <p style="margin:16px 0 0;color:#64748b;font-size:13px;line-height:1.6;">
+                    Web beta (computer):<br />
+                    <a href="${webPortalUrl}" style="color:#7dd3fc;text-decoration:none;word-break:break-all;">${webPortalUrl}</a>
+                  </p>` : ''}
                 </td>
               </tr>
               <tr>
                 <td style="background:#0f172a;padding:20px 36px;border-top:1px solid #1e293b;">
                   <p style="margin:0;color:#475569;font-size:12px;text-align:center;">
-                    Block Vote · Vote only via the official mobile app
+                    Block Vote · Android app recommended · Web beta on computer
                   </p>
                 </td>
               </tr>
@@ -368,9 +467,10 @@ export async function sendVoteInviteEmail(
     `You're invited to vote in ${electionTitle}`,
     '',
     `Hi ${voterName}, you are registered for ${electionTitle}.`,
-    'Voting is only available in the Block Vote mobile app.',
+    'Open the Block Vote Android app, or use the web beta on a computer.',
     '',
     `Open app & cast vote: ${inviteUrl}`,
+    webPortalUrl ? `Web beta: ${webPortalUrl}` : '',
   ].join('\n');
 
   try {

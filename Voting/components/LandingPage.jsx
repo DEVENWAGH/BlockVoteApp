@@ -17,7 +17,7 @@ const FEATURES = [
   {
     icon: Zap,
     title: 'Launch in Minutes',
-    desc: 'Create an election on the web, upload voters, and they cast ballots in the mobile app.',
+    desc: 'Create an election on the web, upload voters, and they cast ballots in the Android app or the web beta.',
   },
   {
     icon: BarChart3,
@@ -43,7 +43,7 @@ const HOW_IT_WORKS = [
   { step: '01', title: 'Admin signs up', desc: 'Create your admin account and set up elections from the web dashboard.' },
   { step: '02', title: 'Create an election', desc: 'Set a title, description, start and end time. Add candidates with full bios and symbols.' },
   { step: '03', title: 'Invite your voters', desc: 'Upload a CSV of eligible voters. The platform registers them securely on the blockchain.' },
-  { step: '04', title: 'Collect votes & share results', desc: 'Voters cast ballots via secure links. Live results are public and verifiable.' },
+  { step: '04', title: 'Collect votes & share results', desc: 'Voters cast ballots in the Android app or the web beta. Live results are public and verifiable.' },
 ];
 
 export default function LandingPage() {
@@ -63,6 +63,7 @@ export default function LandingPage() {
           <div className="hidden md:flex items-center gap-8 text-sm font-medium text-body">
             <a href="#features" className="hover:text-ink transition">Features</a>
             <a href="#how-it-works" className="hover:text-ink transition">How it works</a>
+            <Link href="/portal" className="hover:text-ink transition">Vote (web beta)</Link>
             <Link href="/elections" className="hover:text-ink transition">Results</Link>
             <Link href="/verify" className="hover:text-ink transition">Verify Vote</Link>
             <Link href="/rules" className="hover:text-ink transition">Rules & Security</Link>
@@ -118,10 +119,10 @@ export default function LandingPage() {
                 Create election free <ArrowRight size={18} />
               </Link>
               <Link
-                href="/verify"
+                href="/portal"
                 className="inline-flex items-center gap-2 border border-white/20 hover:border-white/40 bg-white/5 text-white font-semibold px-8 py-4 rounded-full text-base transition-all"
               >
-                Verify vote
+                Vote on web (beta)
               </Link>
             </div>
 
@@ -318,6 +319,7 @@ export default function LandingPage() {
           </div>
 
           <div className="flex md:justify-center gap-6">
+            <Link href="/portal" className="hover:text-ink transition">Voter portal</Link>
             <Link href="/elections" className="hover:text-ink transition">Public Results</Link>
             <Link href="/verify" className="hover:text-ink transition">Verify Ballots</Link>
             <Link href="/admin-auth" className="hover:text-ink transition">Guardian Portal</Link>

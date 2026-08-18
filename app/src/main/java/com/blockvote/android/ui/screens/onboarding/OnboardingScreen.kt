@@ -12,13 +12,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -26,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.blockvote.android.R
+import com.blockvote.android.ui.WebPortalLinks
 import com.blockvote.android.ui.components.PrimaryGradientButton
 import com.blockvote.android.ui.theme.BlockVoteTheme
 import com.blockvote.android.ui.theme.ElectricCyan
@@ -49,13 +51,13 @@ fun OnboardingScreen(
         verticalArrangement = Arrangement.Center
     ) {
         Icon(
-            painter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_shield),
+            painter = painterResource(id = R.drawable.ic_shield),
             contentDescription = "BlockVote Logo",
             tint = ElectricCyan,
-            modifier = Modifier.size(120.dp)
+            modifier = Modifier.size(96.dp)
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         Text(
             text = "BlockVote",
@@ -65,55 +67,54 @@ fun OnboardingScreen(
         )
 
         Text(
-            text = "Gasless on-chain voting with face + email OTP. No MetaMask required.",
+            text = "See live elections on chain, then vote with face + email OTP. No wallet required.",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
             textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 32.dp)
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
         )
 
-        Spacer(modifier = Modifier.height(48.dp))
+        Spacer(modifier = Modifier.height(36.dp))
 
         PrimaryGradientButton(
-            text = "Unlock & Open Dashboard",
-            onClick = {
-                (context as? FragmentActivity)?.let { activity ->
-                    viewModel.authenticate(activity, onNavigateToDashboard)
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-            icon = androidx.compose.ui.res.painterResource(id = R.drawable.ic_fingerprint)
+            text = "View Live Elections",
+            onClick = onNavigateToDashboard,
+            modifier = Modifier.fillMaxWidth()
         )
 
         Spacer(modifier = Modifier.height(12.dp))
 
         PrimaryGradientButton(
-            text = "Start Voting Portal",
+            text = "Start Voting",
             onClick = {
                 (context as? FragmentActivity)?.let { activity ->
                     viewModel.authenticate(activity, onNavigateToVote)
-                }
+                } ?: onNavigateToVote()
             },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            icon = painterResource(id = R.drawable.ic_fingerprint)
         )
 
-        Spacer(modifier = Modifier.height(20.dp))
-
-        Text(
-            text = "Identical twin or similar face flagged?",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-            textAlign = TextAlign.Center
-        )
         Spacer(modifier = Modifier.height(8.dp))
-        PrimaryGradientButton(
-            text = "Request Twin Verification",
-            onClick = onNavigateToTwinRequest,
-            modifier = Modifier.fillMaxWidth()
-        )
+
+        TextButton(onClick = onNavigateToTwinRequest) {
+            Text(
+                text = "Flagged as a twin? Request verification",
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.75f),
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+
+        TextButton(onClick = { WebPortalLinks.open(context) }) {
+            Text(
+                text = "Vote on web (beta)",
+                color = ElectricCyan,
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
 
         if (authState is OnboardingViewModel.AuthState.Error) {
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             Text(
                 text = (authState as OnboardingViewModel.AuthState.Error).message,
                 color = MaterialTheme.colorScheme.error,

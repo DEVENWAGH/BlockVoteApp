@@ -5,7 +5,7 @@ Deploy the Next.js backend, configure S3 for party symbols, and distribute the A
 ## Architecture overview
 
 ```
-Voters (Android) ──► Next.js API (Vercel or AWS) ──► MongoDB Atlas
+Voters (Android app or web beta) ──► Next.js API (Vercel or AWS) ──► MongoDB Atlas
                               │
                               ├──► Ethereum RPC (Alchemy / Infura)
                               ├──► AWS S3 (party symbols, photos)
@@ -35,6 +35,7 @@ Set these in the Vercel project dashboard (Production + Preview):
 | `JWT_SECRET` | Yes | Session / token signing |
 | `SERVER_IDENTITY_SECRET` | Yes | Voter identity HMAC |
 | `NEXTAUTH_URL` | Yes | `https://your-domain.vercel.app` |
+| `NEXT_PUBLIC_APP_URL` | Yes | Same public origin (invite + web portal links) |
 | `RPC_URL` | Yes | Sepolia/mainnet RPC (Alchemy) |
 | `NEXT_PUBLIC_CONTRACT_ADDRESS` | Yes | Deployed proxy address |
 | `RELAYER_PRIVATE_KEY` | Yes | Gasless vote relay wallet |
@@ -149,23 +150,24 @@ The Android app is **not** hosted on Vercel/AWS — voters install it locally or
 
 ```powershell
 cd C:\Users\Devil\Desktop\blockvote
-.\gradlew.bat bundleRelease -PapiBaseUrl=https://your-api.example.com/
+.\gradlew.bat bundleProdRelease -PapiBaseUrl=https://www.devz.co.in/
 ```
 
-Set `apiBaseUrl` to your production Next.js URL (must be HTTPS).
+Use the **`prod`** flavor for store builds. Set `apiBaseUrl` to your production Next.js URL (must be HTTPS).
 
 ### Store / sideload options
 
 | Channel | Notes |
 |---------|-------|
-| Google Play | Sign with release keystore; set `API_BASE_URL` in `build.gradle.kts` or `-PapiBaseUrl` |
-| Internal testing | Firebase App Distribution or direct APK |
-| Local dev | `run-emulator.ps1` / `run-device.ps1` (see `RUNNING.md`) |
+| Google Play | Sign with release keystore; `prod` flavor → `https://www.devz.co.in/` |
+| Internal testing | `.\scripts\run-prod-apk.ps1` or Firebase App Distribution |
+| Local dev | `run-emulator.ps1` / `run-device.ps1` (`local` flavor → localhost) |
 
 ### Production checklist
 
 - [ ] HTTPS API URL baked into release build
-- [ ] Deep links: `blockvote://vote/{electionId}` configured in `AndroidManifest.xml`
+- [ ] Deep links: `blockvote://vote/{electionId}` plus HTTPS App Links for `/go/` and `/portal/` on `www.devz.co.in`
+- [ ] `/.well-known/assetlinks.json` includes the Play App Signing SHA-256 (debug fingerprint is bundled for sideloads)
 - [ ] Network security config allows your API domain only
 - [ ] Biometric / camera permissions documented for store review
 

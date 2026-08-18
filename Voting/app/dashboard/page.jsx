@@ -880,17 +880,19 @@ function ElectionsTab() {
                         {isVoting && (
                           <div className="bg-green-50 border border-green-200 dark:bg-green-950/30 dark:border-green-800 rounded-xl p-5 text-green-700 dark:text-green-300">
                             <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
-                              <Vote size={15} /> Mobile voting is open
+                              <Vote size={15} /> Voting is open
                             </h4>
                             <p className="text-body dark:text-green-400/80 text-xs mb-3">
-                              Share this link — it opens the Block Vote Android app. Voters also receive it by email after CSV upload.
+                              Share the app invite (opens Android). Web beta is for computers — it skips surrounding monitoring.
                             </p>
                             <div className="bg-canvas border border-hairline rounded-lg px-4 py-3 flex items-center justify-between gap-3">
                               <code className="text-primary text-xs font-mono truncate">
-                                {e.inviteUrl || (typeof window !== 'undefined' ? `${window.location.origin}/go/${e.id}` : `/go/${e.id}`)}
+                                {e.inviteUrl || '—'}
                               </code>
                               <button
-                                onClick={() => navigator.clipboard.writeText(e.inviteUrl || `${window.location.origin}/go/${e.id}`)}
+                                onClick={() => {
+                                  if (e.inviteUrl) navigator.clipboard.writeText(e.inviteUrl);
+                                }}
                                 className="text-xs bg-primary hover:bg-primary-active text-white px-3 py-1.5 rounded-full font-semibold transition shrink-0 cursor-pointer"
                               >
                                 Copy Link
@@ -898,6 +900,9 @@ function ElectionsTab() {
                             </div>
                             <p className="text-body text-xs mt-2 font-mono truncate opacity-70">
                               Deep link: {e.deepLink || `blockvote://vote/${e.id}`}
+                            </p>
+                            <p className="text-body text-xs mt-1 font-mono truncate opacity-70">
+                              Web beta: {e.portalUrl || '—'}
                             </p>
                           </div>
                         )}

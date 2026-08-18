@@ -20,17 +20,33 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // Override from CLI: ./gradlew installDebug -PapiBaseUrl=http://10.0.2.2:3000/
-        // Emulator: http://10.0.2.2:3000/  |  Physical + adb reverse: http://127.0.0.1:3000/
-        val apiBaseUrl = (project.findProperty("apiBaseUrl") as String?)
-            ?: "http://127.0.0.1:3000/"
-        buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
+        // Overridden by product flavors; CLI still wins: -PapiBaseUrl=...
+        buildConfigField("String", "API_BASE_URL", "\"http://127.0.0.1:3000/\"")
         buildConfigField("boolean", "USE_DEMO_DATA", "false")
+        buildConfigField("String", "APP_ENV", "\"development\"")
+    }
+
+    flavorDimensions += "env"
+    productFlavors {
+        create("local") {
+            dimension = "env"
+            // Emulator → host loopback. Physical device: use run-device.ps1 (-PapiBaseUrl LAN).
+            val apiBaseUrl = (project.findProperty("apiBaseUrl") as String?)
+                ?: "http://10.0.2.2:3000/"
+            buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
+            buildConfigField("String", "APP_ENV", "\"development\"")
+        }
+        create("prod") {
+            dimension = "env"
+            val apiBaseUrl = (project.findProperty("apiBaseUrl") as String?)
+                ?: "https://www.devz.co.in/"
+            buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
+            buildConfigField("String", "APP_ENV", "\"production\"")
+        }
     }
 
     buildTypes {
         debug {
-            // Talk to real Voting Next.js backend (no fake election data).
             buildConfigField("boolean", "USE_DEMO_DATA", "false")
         }
         release {

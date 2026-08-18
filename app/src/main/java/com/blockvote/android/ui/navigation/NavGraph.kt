@@ -1,5 +1,6 @@
 package com.blockvote.android.ui.navigation
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateListOf
@@ -36,30 +37,38 @@ sealed interface Route : NavKey {
 
 @Composable
 fun BlockVoteNavGraph(deepLinkElectionId: String? = null) {
-    val start: NavKey = if (!deepLinkElectionId.isNullOrBlank()) {
+    val start: NavKey = if (deepLinkElectionId != null) {
         Route.VotePortal(deepLinkElectionId)
     } else {
         Route.Onboarding
     }
     val backStack = remember(deepLinkElectionId) { mutableStateListOf(start) }
 
+    fun popOrHome() {
+        if (backStack.size > 1) {
+            backStack.removeLastOrNull()
+        } else {
+            backStack.clear()
+            backStack.add(Route.Onboarding)
+        }
+    }
+
+    // Edge swipe / system back when there is somewhere to go
+    BackHandler(enabled = backStack.size > 1) {
+        backStack.removeLastOrNull()
+    }
+
     NavDisplay(
         backStack = backStack,
-        onBack = {
-            if (backStack.size > 1) {
-                backStack.removeLastOrNull()
-            }
-        },
+        onBack = { popOrHome() },
         entryProvider = { key ->
             when (key) {
                 is Route.Onboarding -> NavEntry(key) {
                     OnboardingScreen(
                         onNavigateToDashboard = {
-                            backStack.clear()
                             backStack.add(Route.Dashboard)
                         },
                         onNavigateToVote = {
-                            backStack.clear()
                             backStack.add(Route.VotePortal())
                         },
                         onNavigateToTwinRequest = {
@@ -69,8 +78,9 @@ fun BlockVoteNavGraph(deepLinkElectionId: String? = null) {
                 }
                 is Route.Dashboard -> NavEntry(key) {
                     DashboardScreen(
+                        onBack = { popOrHome() },
                         onNavigateToElection = { electionId ->
-                            backStack.add(Route.ElectionDetail(electionId))
+                            backStack.add(Route.VotePortal(electionId))
                         },
                         onNavigateToVote = {
                             backStack.add(Route.VotePortal())
@@ -80,14 +90,7 @@ fun BlockVoteNavGraph(deepLinkElectionId: String? = null) {
                 is Route.VotePortal -> NavEntry(key) {
                     VotePortalScreen(
                         initialElectionId = key.electionId.ifBlank { null },
-                        onFinished = {
-                            if (backStack.size > 1) {
-                                backStack.removeLastOrNull()
-                            } else {
-                                backStack.clear()
-                                backStack.add(Route.Dashboard)
-                            }
-                        },
+                        onFinished = { popOrHome() },
                         onNavigateToTwinRequest = { electionId, email ->
                             backStack.add(Route.TwinRequest(electionId, email))
                         }
@@ -99,16 +102,13 @@ fun BlockVoteNavGraph(deepLinkElectionId: String? = null) {
                         onNavigateToReceipt = { receiptId ->
                             backStack.add(Route.Receipt(receiptId))
                         },
-                        onBack = {
-                            if (backStack.size > 1) {
-                                backStack.removeLastOrNull()
-                            }
-                        }
+                        onBack = { popOrHome() }
                     )
                 }
                 is Route.Receipt -> NavEntry(key) {
                     ReceiptScreen(
                         receiptId = key.receiptId,
+                        onBack = { popOrHome() },
                         onNavigateBackToDashboard = {
                             backStack.clear()
                             backStack.add(Route.Dashboard)
@@ -119,11 +119,7 @@ fun BlockVoteNavGraph(deepLinkElectionId: String? = null) {
                     TwinRequestScreen(
                         initialElectionId = key.electionId.ifBlank { null },
                         initialEmail = key.email.ifBlank { null },
-                        onBack = {
-                            if (backStack.size > 1) {
-                                backStack.removeLastOrNull()
-                            }
-                        }
+                        onBack = { popOrHome() }
                     )
                 }
                 else -> NavEntry(key) { Text("Unknown Route") }

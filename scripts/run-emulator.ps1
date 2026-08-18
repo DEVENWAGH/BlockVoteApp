@@ -50,10 +50,10 @@ if (-not $devices) {
     if ($boot.Trim() -ne "1") { throw "Emulator boot timed out." }
 }
 
-Write-Host "==> Building & installing (apiBaseUrl=http://10.0.2.2:3000/)" -ForegroundColor Green
+Write-Host "==> Building & installing localDebug (apiBaseUrl=http://10.0.2.2:3000/)" -ForegroundColor Green
 Push-Location $Root
 try {
-    & .\gradlew.bat installDebug -PapiBaseUrl=http://10.0.2.2:3000/
+    & .\gradlew.bat installLocalDebug -PapiBaseUrl=http://10.0.2.2:3000/
     if ($LASTEXITCODE -ne 0) { throw "Gradle install failed." }
 
     Write-Host "==> Launching com.blockvote.android" -ForegroundColor Green

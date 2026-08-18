@@ -5,7 +5,11 @@ import "@openzeppelin/hardhat-upgrades";
 import "hardhat-gas-reporter";
 import "solidity-coverage";
 import dotenv from "dotenv";
+// Local Next/Hardhat: .env (development). Sepolia deploy: HARDHAT_ENV_FILE=.env.production
 dotenv.config();
+if (process.env.HARDHAT_ENV_FILE) {
+  dotenv.config({ path: process.env.HARDHAT_ENV_FILE, override: true });
+}
 
 /**
  * Aegis Protocol — Hardhat Config

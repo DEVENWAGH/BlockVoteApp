@@ -12,7 +12,7 @@ import { relayCreateElection } from "@/lib/relay";
 import { pinJSON, getIPFSUrl } from "@/lib/ipfs";
 import { ethers } from "ethers";
 import { auth } from "@/auth";
-import { getVoteDeepLink, getVoteInviteUrl } from "@/lib/appLinks";
+import { getVoteDeepLink, getVoteInviteUrl, getWebPortalUrl } from "@/lib/appLinks";
 
 async function getReadContract() {
   const abi = (
@@ -42,6 +42,7 @@ export async function GET() {
     }
 
     await connectDB();
+    const orgName = admin?.name || "admin";
 
     let onChainElections = [];
     try {
@@ -86,7 +87,8 @@ export async function GET() {
           guardianApprovedBy: db.guardianApprovedBy || "",
           guardianApprovedAt: db.guardianApprovedAt || null,
           ipfsCid: db.ipfsCid || "",
-          inviteUrl: getVoteInviteUrl(e.id),
+          inviteUrl: getVoteInviteUrl(e.id, { orgName, electionTitle: e.title }),
+          portalUrl: getWebPortalUrl(e.id, { orgName, electionTitle: e.title }),
           deepLink: getVoteDeepLink(e.id),
         };
       });
@@ -115,6 +117,8 @@ export async function POST(req) {
       startTime,
       endTime,
     } = await req.json();
+
+    const orgName = admin?.name || "admin";
 
     if (!title || !description || !startTime || !endTime) {
       return NextResponse.json(
@@ -214,7 +218,8 @@ export async function POST(req) {
         electionId: newElectionId,
         ipfsCid,
         ipfsUrl: getIPFSUrl(ipfsCid),
-        inviteUrl: getVoteInviteUrl(newElectionId),
+        inviteUrl: getVoteInviteUrl(newElectionId, { orgName, electionTitle: title }),
+        portalUrl: getWebPortalUrl(newElectionId, { orgName, electionTitle: title }),
         deepLink: getVoteDeepLink(newElectionId),
       },
       { status: 201 },

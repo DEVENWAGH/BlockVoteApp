@@ -1,5 +1,6 @@
 package com.blockvote.android.ui.screens.vote
 
+import androidx.activity.compose.BackHandler
 import android.Manifest
 import com.blockvote.android.data.remote.AssetUrlResolver
 import androidx.compose.animation.AnimatedContent
@@ -85,6 +86,16 @@ fun VotePortalScreen(
 ) {
     val state by viewModel.state.collectAsState()
 
+    fun handleBack() {
+        when (state.step) {
+            VoteStep.ELECTION, VoteStep.SUCCESS -> onFinished()
+            else -> viewModel.goBack()
+        }
+    }
+
+    // Gesture / system back: previous vote step, then leave screen
+    BackHandler { handleBack() }
+
     LaunchedEffect(initialElectionId) {
         if (!initialElectionId.isNullOrBlank() && state.selectedElection == null) {
             viewModel.onElectionIdChange(initialElectionId)
@@ -108,12 +119,7 @@ fun VotePortalScreen(
         ) {
             VoteHeader(
                 state = state,
-                onBack = {
-                    when (state.step) {
-                        VoteStep.ELECTION, VoteStep.SUCCESS -> onFinished()
-                        else -> viewModel.goBack()
-                    }
-                }
+                onBack = { handleBack() }
             )
             Spacer(modifier = Modifier.height(16.dp))
             StepIndicator(state.step)

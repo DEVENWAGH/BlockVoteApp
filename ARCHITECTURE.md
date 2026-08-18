@@ -2,8 +2,8 @@
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│                    ANDROID APP (voters only)                              │
-│  Invite link / deep link → email → face → ballot → OTP → on-chain vote   │
+│  ANDROID APP (voters)   Invite / deep link → email → rotate scan + face  │
+│  WEB BETA (computers)   /portal → email → direct camera → ballot → OTP   │
 └───────────────────────────────┬──────────────────────────────────────────┘
                                 │ HTTPS / JSON
                                 ▼
@@ -23,17 +23,19 @@
 
 | Surface | Who | What |
 |---------|-----|------|
-| **Web** (`Voting/`) | Election admins + guardians | Create elections, candidates, CSV roster, approve go-live, gas, analytics |
-| **Android app** | Voters | Cast votes only (no org tenancy) |
+| **Web admin** (`Voting/`) | Election admins + guardians | Create elections, candidates, CSV roster, approve go-live, gas, analytics |
+| **Android app** | Voters | Cast votes with surrounding / motion liveness |
+| **Web beta** (`/portal`) | Voters on a computer | Same ballot APIs; **direct camera capture** (no surrounding monitor) |
 
 Organizations are **removed**. Admins own elections via `createdBy`. Voters are scoped by `electionId` + `email`.
 
 ## Voter links
 
-- HTTPS invite: `{APP_URL}/go/{electionId}` → tries `blockvote://vote/{electionId}`
+- HTTPS invite: `{APP_URL}/go/{electionId}` → Android browsers open `blockvote://vote/{electionId}`
+- Web beta: `{APP_URL}/portal` and `{APP_URL}/portal/{electionId}` (desktop; phones are sent to the app)
 - Custom scheme: `blockvote://vote/{electionId}`
 - CSV upload auto-emails invite links; dashboard copies the same URL when voting is live
-- Web `/vote/*` is retired (shows “use the app”)
+- Legacy `/vote/*` redirects to `/portal/*`
 
 ## Mobile API sequence
 

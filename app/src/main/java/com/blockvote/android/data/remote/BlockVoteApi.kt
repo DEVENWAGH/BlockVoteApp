@@ -6,6 +6,7 @@ import com.blockvote.android.data.remote.dto.BiometricVerifyRequest
 import com.blockvote.android.data.remote.dto.BiometricVerifyResponse
 import com.blockvote.android.data.remote.dto.CandidatesResponse
 import com.blockvote.android.data.remote.dto.ElectionDetailResponse
+import com.blockvote.android.data.remote.dto.ElectionsResponse
 import com.blockvote.android.data.remote.dto.SendOtpRequest
 import com.blockvote.android.data.remote.dto.SendOtpResponse
 import com.blockvote.android.data.remote.dto.VerifyOtpRequest
@@ -27,6 +28,9 @@ class BlockVoteApi(
     private val baseUrl: String
 ) {
     private val jsonMedia = "application/json; charset=utf-8".toMediaType()
+
+    fun getPublicElections(): ElectionsResponse =
+        getJson("api/elections/public", emptyMap(), ElectionsResponse::class.java)
 
     fun getElection(electionId: String): ElectionDetailResponse =
         getJson("api/elections/$electionId", emptyMap(), ElectionDetailResponse::class.java)

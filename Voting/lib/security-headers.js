@@ -83,6 +83,7 @@ function buildSecurityHeaderRoutes() {
 
   return [
     { source: '/vote/:path*', headers: voteHeaders },
+    { source: '/org/:path*', headers: voteHeaders },
     { source: '/api/auth/verify-otp', headers: voteHeaders },
     { source: '/:path*', headers: defaultHeaders },
   ];

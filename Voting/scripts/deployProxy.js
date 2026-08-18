@@ -1,10 +1,29 @@
 import hre from "hardhat";
-import { writeFileSync, readFileSync, mkdirSync, existsSync } from "fs";
+import { writeFileSync, readFileSync, mkdirSync, existsSync, copyFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+/** Keep isolated profile files in sync after deploy writes env values. */
+function syncEnvAfterDeploy(writtenPath, networkName) {
+  const votingRoot = resolve(__dirname, "..");
+  const isLocal = networkName === "localhost" || networkName === "hardhat";
+  const profileName = isLocal ? "development" : "production";
+  const profilePath = resolve(votingRoot, `.env.${profileName}`);
+  if (existsSync(writtenPath)) {
+    copyFileSync(writtenPath, profilePath);
+    if (isLocal) {
+      writeFileSync(resolve(votingRoot, ".env.active"), "development\n");
+    }
+    console.log(
+      isLocal
+        ? `✅ Synced local profile → .env.development`
+        : `✅ Synced deploy archive → .env.production (Vercel remains runtime source of truth)`,
+    );
+  }
+}
 
 async function main() {
   console.log("🚀 Deploying VotingV3 as UUPS Proxy...");
@@ -33,10 +52,16 @@ async function main() {
       return new hre.ethers.Wallet(key, hre.ethers.provider);
     };
     deployer  = walletFromEnv("DEPLOYER_PRIVATE_KEY", "pays deployment gas");
-    relay     = walletFromEnv("ADMIN_RELAY_PRIVATE_KEY", "relay + guardian 1");
-    guardian1 = relay;
+    relay     = walletFromEnv("ADMIN_RELAY_PRIVATE_KEY", "relay / gas station");
+    guardian1 = walletFromEnv("GUARDIAN_1_PRIVATE_KEY", "guardian 1 of 3");
     guardian2 = walletFromEnv("GUARDIAN_2_PRIVATE_KEY", "guardian 2 of 3");
-    guardian3 = walletFromEnv("GUARDIAN_3_PRIVATE_KEY", "guardian 3 of 3");
+    const g3Key = process.env.GUARDIAN_3_PRIVATE_KEY;
+    if (g3Key) {
+      guardian3 = new hre.ethers.Wallet(g3Key, hre.ethers.provider);
+    } else {
+      guardian3 = hre.ethers.Wallet.createRandom().connect(hre.ethers.provider);
+      console.log("   Guardian 3: generated placeholder (contract requires 3 unique addresses)");
+    }
   }
 
   console.log("   Deployer  :", deployer.address);
@@ -89,10 +114,18 @@ async function main() {
   );
   console.log("   ABI saved to lib/contracts/VotingV3.json (and VotingV1.json alias)");
 
-  // ── Update .env ─────────────────────────────────────────────────────────────
-  const envPath = resolve(__dirname, "../.env");
-  if (existsSync(envPath)) {
-    let env = readFileSync(envPath, "utf8");
+  // ── Persist addresses ─────────────────────────────────────────────────────
+  // Local deploy → update active .env + .env.development (what Next uses here).
+  // Sepolia deploy → update .env.production archive ONLY (do not clobber local .env).
+  // Live site secrets for Next remain on Vercel.
+  const isLocal = hre.network.name === "localhost" || hre.network.name === "hardhat";
+  const envPath = resolve(
+    __dirname,
+    isLocal ? "../.env" : "../.env.production",
+  );
+
+  if (existsSync(envPath) || isLocal) {
+    let env = existsSync(envPath) ? readFileSync(envPath, "utf8") : "";
 
     const replace = (key, value) => {
       const regex = new RegExp(`^${key}=.*`, "m");
@@ -114,17 +147,28 @@ async function main() {
     replace("NEXT_PUBLIC_GUARDIAN_3",       guardian3.address);
     replace("NEXT_PUBLIC_DEPLOYER_ADDRESS", deployer.address);
 
-    if (hre.network.name === "localhost" || hre.network.name === "hardhat") {
+    if (isLocal) {
       replace("RPC_URL",             "http://127.0.0.1:8545");
       replace("NEXT_PUBLIC_RPC_URL", "http://127.0.0.1:8545");
     } else {
       const sepoliaRpc = process.env.SEPOLIA_RPC_URL || process.env.RPC_URL || "";
-      replace("RPC_URL",             sepoliaRpc);
-      replace("NEXT_PUBLIC_RPC_URL", sepoliaRpc);
+      if (sepoliaRpc) {
+        replace("RPC_URL",             sepoliaRpc);
+        replace("NEXT_PUBLIC_RPC_URL", sepoliaRpc);
+      }
     }
 
     writeFileSync(envPath, env);
-    console.log("\n✅ .env updated with new proxy/impl addresses and wallet info");
+    console.log(
+      isLocal
+        ? "\n✅ .env updated with new proxy/impl addresses and wallet info"
+        : "\n✅ .env.production archive updated (copy new contract address into Vercel if needed)",
+    );
+    syncEnvAfterDeploy(envPath, hre.network.name);
+  } else {
+    console.log(
+      "\n⚠️  No .env.production archive found — printed addresses only. Add them to Vercel.",
+    );
   }
 
   console.log("\n📋 Summary:");

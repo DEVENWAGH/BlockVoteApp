@@ -1,5 +1,6 @@
 package com.blockvote.android
 
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.compose.setContent
@@ -10,8 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.fragment.app.FragmentActivity
 import com.blockvote.android.ui.navigation.BlockVoteNavGraph
@@ -20,13 +19,14 @@ import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : FragmentActivity() {
+    private val incomingVoteElectionId = mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        incomingVoteElectionId.value = parseIncomingVote(intent?.data)
         enableEdgeToEdge()
         setContent {
-            var deepLinkElectionId by remember {
-                mutableStateOf(parseElectionId(intent?.data))
-            }
+            val deepLinkElectionId by incomingVoteElectionId
             BlockVoteTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     Box(
@@ -41,15 +41,24 @@ class MainActivity : FragmentActivity() {
         }
     }
 
-    private fun parseElectionId(uri: Uri?): String? {
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        incomingVoteElectionId.value = parseIncomingVote(intent.data)
+    }
+
+    /**
+     * @return null for a normal cold start; election id (possibly empty) when the
+     * intent should open the in-app vote portal.
+     */
+    private fun parseIncomingVote(uri: Uri?): String? {
         if (uri == null) return null
-        // blockvote://vote/{electionId}
-        if (uri.scheme == "blockvote" && uri.host == "vote") {
-            return uri.pathSegments.firstOrNull()?.takeIf { it.isNotBlank() }
+        if (uri.scheme == "blockvote" && (uri.host == "vote" || uri.host == "portal")) {
+            return uri.pathSegments.firstOrNull().orEmpty()
         }
-        // https://host/go/{electionId} (if App Links are configured later)
-        if (uri.host != null && uri.pathSegments.firstOrNull() == "go") {
-            return uri.pathSegments.getOrNull(1)?.takeIf { it.isNotBlank() }
+        val first = uri.pathSegments.firstOrNull() ?: return null
+        if (first == "go" || first == "portal") {
+            return uri.pathSegments.getOrNull(1).orEmpty()
         }
         return null
     }

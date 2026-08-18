@@ -29,6 +29,7 @@ export async function GET() {
       guardianApproved: true,
     })
       .sort({ createdAt: -1 })
+      .populate({ path: 'createdBy', select: 'name' })
       .lean();
 
     let onChain = [];
@@ -50,6 +51,11 @@ export async function GET() {
 
     const chainMap = Object.fromEntries(onChain.map((e) => [e.id, e]));
     const elections = dbElections.map((e) => {
+      const orgName = e.createdBy?.name || 'admin';
+      const electionName = e.title;
+      const basePath = `/org/${encodeURIComponent(orgName)}/election/${encodeURIComponent(
+        electionName,
+      )}/${encodeURIComponent(e.electionId)}`;
       const c = chainMap[e.electionId] || {};
       return {
         id: e.electionId,
@@ -60,7 +66,8 @@ export async function GET() {
         endTime: c.endTime || Math.floor(new Date(e.endTime).getTime() / 1000),
         phase: c.phase ?? e.phase,
         guardianApproved: true,
-        inviteUrl: `/go/${e.electionId}`,
+        inviteUrl: basePath,
+        portalUrl: `${basePath}?web=1`,
       };
     });
 

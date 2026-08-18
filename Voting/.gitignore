@@ -37,7 +37,12 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# Active + isolated env profiles (never commit secrets)
 .env
+.env.development
+.env.production
+.env.active
+.env.bak.*
 .kiro
 # End of https://www.toptal.com/developers/gitignore/api/nextjs
 

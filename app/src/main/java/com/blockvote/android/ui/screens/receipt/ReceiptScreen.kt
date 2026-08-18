@@ -1,7 +1,9 @@
 package com.blockvote.android.ui.screens.receipt
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -28,16 +30,33 @@ import java.util.*
 @Composable
 fun ReceiptScreen(
     receiptId: String,
+    onBack: () -> Unit = {},
     onNavigateBackToDashboard: () -> Unit,
     viewModel: ReceiptViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+
+    BackHandler { onBack() }
 
     LaunchedEffect(receiptId) {
         viewModel.loadReceipt(receiptId)
     }
 
     Scaffold(
+        topBar = {
+            @OptIn(ExperimentalMaterial3Api::class)
+            TopAppBar(
+                title = { Text("Vote receipt") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            Icons.AutoMirrored.Rounded.ArrowBack,
+                            contentDescription = "Back"
+                        )
+                    }
+                }
+            )
+        },
         bottomBar = {
             Box(modifier = Modifier.padding(24.dp).navigationBarsPadding()) {
                 OutlinedButton(

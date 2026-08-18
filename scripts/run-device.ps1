@@ -91,11 +91,11 @@ if ($UseAdbReverse) {
     }
 }
 
-Write-Host "==> Building and installing (apiBaseUrl=$apiUrl)" -ForegroundColor Green
+Write-Host "==> Building and installing localDebug (apiBaseUrl=$apiUrl)" -ForegroundColor Green
 Push-Location $Root
 try {
     $env:ANDROID_SERIAL = $serial
-    & .\gradlew.bat installDebug "-PapiBaseUrl=$apiUrl"
+    & .\gradlew.bat installLocalDebug "-PapiBaseUrl=$apiUrl"
     if ($LASTEXITCODE -ne 0) { throw "Gradle install failed." }
 
     Write-Host "==> Launching com.blockvote.android" -ForegroundColor Green

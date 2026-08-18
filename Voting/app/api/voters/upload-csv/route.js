@@ -1,6 +1,6 @@
 /**
  * POST /api/voters/upload-csv
- * Upsert voters for an election, register on-chain, email app invite links.
+ * Upsert voters for an election and register them on-chain.
  */
 import { NextResponse } from "next/server";
 import { parse } from "csv-parse/sync";
@@ -10,8 +10,6 @@ import Election from "@/lib/models/Election";
 import { pinJSON, getIPFSUrl } from "@/lib/ipfs";
 import { relayRegisterVoter, resetRelayNonce, isVoterRegisteredOnChain } from "@/lib/relay";
 import { computeNullifierHash, isAlreadyRegisteredError } from "@/lib/voterIdentity";
-import { sendVoteInviteEmail } from "@/lib/mailer";
-import { getVoteDeepLink, getVoteInviteUrl } from "@/lib/appLinks";
 import { auth } from "@/auth";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
@@ -196,7 +194,6 @@ export async function POST(req) {
     let linked = 0;
     let regFailed = 0;
     const regErrors = [];
-    let invitesSent = 0;
 
     const pendingVoters = await Voter.find({
       electionId,
@@ -260,30 +257,6 @@ export async function POST(req) {
       }
     }
 
-    // Email app invite links to newly registered voters (and any without invite yet)
-    const inviteUrl = getVoteInviteUrl(electionId);
-    const deepLink = getVoteDeepLink(electionId);
-    const toInvite = await Voter.find({
-      electionId,
-      status: "registered",
-      $or: [{ inviteSentAt: null }, { inviteSentAt: { $exists: false } }],
-    }).limit(500);
-
-    for (const voter of toInvite) {
-      try {
-        await sendVoteInviteEmail(voter.email, {
-          voterName: voter.name,
-          electionTitle: election.title,
-          inviteUrl,
-          deepLink,
-        });
-        await Voter.findByIdAndUpdate(voter._id, { inviteSentAt: new Date() });
-        invitesSent++;
-      } catch (inviteErr) {
-        console.warn(`[upload-csv] invite failed for ${voter.email}:`, inviteErr.message);
-      }
-    }
-
     return NextResponse.json({
       success: true,
       electionId,
@@ -295,13 +268,12 @@ export async function POST(req) {
       hasMoreErrors: errors.length > 50,
       ipfsCid,
       ipfsUrl: getIPFSUrl(ipfsCid),
-      inviteUrl,
       registration: {
         registered,
         linked,
         failed: regFailed,
         failedVoters: regErrors,
-        invitesSent,
+        invitesSent: 0,
       },
     });
   } catch (err) {

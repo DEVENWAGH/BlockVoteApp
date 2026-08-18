@@ -1,5 +1,6 @@
 package com.blockvote.android.ui.screens.detail
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.border
@@ -47,6 +48,8 @@ fun ElectionDetailScreen(
     val voteResult by viewModel.voteResult.collectAsState(initial = null)
     
     var showConfirmation by remember { mutableStateOf(false) }
+
+    BackHandler { onBack() }
 
     LaunchedEffect(electionId) {
         viewModel.loadElection(electionId)

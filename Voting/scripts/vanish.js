@@ -8,6 +8,9 @@
 import 'dotenv/config';
 import mongoose from 'mongoose';
 import { RekognitionClient, DeleteCollectionCommand, CreateCollectionCommand } from '@aws-sdk/client-rekognition';
+import { assertDestructiveAllowed } from './env-guard.js';
+
+assertDestructiveAllowed('vanish');
 
 async function clearMongoDB() {
   const MONGODB_URI = process.env.MONGODB_URI;

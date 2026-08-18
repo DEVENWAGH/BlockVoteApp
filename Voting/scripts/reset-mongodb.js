@@ -14,6 +14,9 @@
  */
 import 'dotenv/config';
 import mongoose from 'mongoose';
+import { assertDestructiveAllowed } from './env-guard.js';
+
+assertDestructiveAllowed('reset-mongodb');
 
 const MONGODB_URI = process.env.MONGODB_URI;
 if (!MONGODB_URI) {

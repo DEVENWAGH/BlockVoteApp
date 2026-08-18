@@ -1,14 +1,15 @@
 # Start BlockVote Next.js backend (Hardhat + API on :3000)
 # Uses MongoDB already running locally (MongoDB Compass / mongod) — no Docker.
+# Always activates the DEVELOPMENT env profile (local DB + Hardhat).
 # Usage: .\scripts\dev-server.ps1
 
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 $Voting = Join-Path $Root "Voting"
 
-Write-Host "==> BlockVote backend" -ForegroundColor Cyan
+Write-Host "==> BlockVote backend (DEVELOPMENT profile)" -ForegroundColor Cyan
 Write-Host "    Expect MongoDB via Compass/mongod on :27017" -ForegroundColor DarkGray
-Write-Host "    Hardhat :8545 | Next.js :3000" -ForegroundColor DarkGray
+Write-Host "    DB name: blockvote_local | Hardhat :8545 | Next.js :3000" -ForegroundColor DarkGray
 
 # Quick check that something is listening on 27017
 try {
@@ -17,9 +18,7 @@ try {
         Write-Host ""
         Write-Host "WARNING: Nothing listening on 127.0.0.1:27017" -ForegroundColor Yellow
         Write-Host "  Start MongoDB locally, then open Compass and connect to:" -ForegroundColor Yellow
-        Write-Host "  mongodb://127.0.0.1:27017" -ForegroundColor DarkGray
-        Write-Host "  Ensure Voting/.env has:" -ForegroundColor Yellow
-        Write-Host "  MONGODB_URI=mongodb://127.0.0.1:27017/blockvote" -ForegroundColor DarkGray
+        Write-Host "  mongodb://127.0.0.1:27017/blockvote_local" -ForegroundColor DarkGray
         Write-Host ""
     } else {
         Write-Host "==> MongoDB reachable on :27017 (Compass/local)" -ForegroundColor Green
@@ -35,13 +34,9 @@ try {
         yarn install
     }
 
-    if (-not (Test-Path (Join-Path $Voting ".env"))) {
-        Write-Host ""
-        Write-Host "WARNING: Voting/.env missing. Set at least:" -ForegroundColor Yellow
-        Write-Host "  MONGODB_URI=mongodb://127.0.0.1:27017/blockvote" -ForegroundColor DarkGray
-        Write-Host "  JWT_SECRET=dev-jwt-secret-change-me" -ForegroundColor DarkGray
-        Write-Host "  SERVER_IDENTITY_SECRET=dev-identity-secret-change-me" -ForegroundColor DarkGray
-        Write-Host ""
+    if (-not (Test-Path (Join-Path $Voting ".env.development"))) {
+        Write-Host "==> Bootstrapping isolated env profiles (yarn env:init)..." -ForegroundColor Yellow
+        yarn env:init
     }
 
     Write-Host "==> Starting yarn dev (Hardhat + contract deploy + Next.js)..." -ForegroundColor Green
