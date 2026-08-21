@@ -148,7 +148,7 @@ The Android app is **not** hosted on Vercel/AWS — voters install it locally or
 ### Build release APK/AAB
 
 ```powershell
-cd C:\Users\Devil\Desktop\blockvote
+# From the project root:
 .\gradlew.bat bundleRelease -PapiBaseUrl=https://your-api.example.com/
 ```
 

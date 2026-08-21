@@ -224,7 +224,7 @@ Where:
 
 The output is a unique `bytes32` representation that acts as the voter's on-chain registration token. Because Keccak-256 is a one-way cryptographic hash function, it is mathematically impossible to decrypt the hash to recover the voter's email address.
 
-The implementation is written in [lib/voterIdentity.js](file:///c:/Users/Devil/Desktop/Voting/lib/voterIdentity.js):
+The implementation is written in [lib/voterIdentity.js](../../lib/voterIdentity.js):
 ```javascript
 export function computeNullifierHash(orgSlug, email) {
   const secret = process.env.SERVER_IDENTITY_SECRET || 'dev-identity-secret-change-in-prod-12345';
@@ -242,7 +242,7 @@ For example:
 $$\text{eyeDistanceRatio} = \frac{\text{DistanceBetweenPupils}}{\text{ForeheadToChinDistance}}$$
 By representing facial parameters as ratios of the total face height rather than absolute pixels, the system ensures that a voter's biometric profile remains consistent regardless of their distance from the camera or screen resolution.
 
-The implementation is written in [lib/biometric.js](file:///c:/Users/Devil/Desktop/Voting/lib/biometric.js):
+The implementation is written in [lib/biometric.js](../../lib/biometric.js):
 ```javascript
 export function normalizeLandmarks(landmarks) {
   const { eyeDistance, noseLength, mouthWidth, jawWidth, faceHeight } = landmarks;
@@ -261,7 +261,7 @@ During verification, AWS Rekognition calculates the similarity between the live 
 $$\text{Similarity} \ge 85\%$$
 If the similarity score drops below 85%, the verification fails. Additionally, to detect Sybil attacks, a comparison is made against the faces of all users who have already voted in the current election. If any comparison yields a similarity $\ge 85\%$, the transaction is blocked, indicating that the voter is attempting to vote twice using a different email account.
 
-The implementation is written in [app/api/biometric/verify/route.js](file:///c:/Users/Devil/Desktop/Voting/app/api/biometric/verify/route.js):
+The implementation is written in [app/api/biometric/verify/route.js](../../app/api/biometric/verify/route.js):
 ```javascript
 const compareCmd = new CompareFacesCommand({
   SourceImage: { Bytes: liveBuffer },
@@ -279,7 +279,7 @@ if (compareRes.FaceMatches && compareRes.FaceMatches.length > 0) {
 #### 4. UUPS Upgradeable Smart Contract Logic
 The smart contract `VotingV1.sol` is upgradeable. The proxy cannot be upgraded to a new implementation unless at least two of the three independent Guardian addresses approve the implementation.
 
-The implementation is written in [contracts/VotingV1.sol](file:///c:/Users/Devil/Desktop/Voting/contracts/VotingV1.sol):
+The implementation is written in [contracts/VotingV1.sol](../../contracts/VotingV1.sol):
 ```solidity
 function _authorizeUpgrade(address newImplementation) internal override {
     bool found = false;

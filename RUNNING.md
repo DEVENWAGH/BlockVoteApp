@@ -19,7 +19,7 @@ Optional: MetaMask for the Guardian portal (`/admin`).
 ### One-time setup
 
 ```powershell
-cd C:\Users\Devil\Desktop\blockvote\Voting
+cd Voting
 copy .env.example .env
 # Edit .env — at minimum set MONGODB_URI, JWT_SECRET, SERVER_IDENTITY_SECRET, AUTH_SECRET
 
