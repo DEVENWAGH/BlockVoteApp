@@ -5,6 +5,8 @@
  */
 import { ethers } from 'ethers';
 import votingArtifact from './contracts/VotingV3.json' with { type: 'json' };
+import { MAX_APP_VOTES, VOTE_CHANNEL } from './voteAllowance.js';
+import { getRpcUrl } from './serverEnv.js';
 
 let _provider = null;
 let _relayWallet = null;
@@ -52,7 +54,7 @@ async function sendRelayTx(sendFn, maxAttempts = 4) {
 
 function getProvider() {
   if (!_provider) {
-    _provider = new ethers.JsonRpcProvider(process.env.RPC_URL || 'http://127.0.0.1:8545');
+    _provider = new ethers.JsonRpcProvider(getRpcUrl());
   }
   return _provider;
 }
@@ -124,8 +126,11 @@ export async function relayRegisterVoter(electionId, nullifierHash, metadata = {
   return { txHash: receipt.hash, blockNumber: receipt.blockNumber };
 }
 
-/** Cast a vote on behalf of a voter (after OTP verification) */
-export async function relayCastVote(electionId, candidateId, voterNullifier) {
+/**
+ * Cast a vote on behalf of a voter (after OTP verification).
+ * channel 'app' is capped at MAX_APP_VOTES on-chain casts; 'station' may override.
+ */
+export async function relayCastVote(electionId, candidateId, voterNullifier, { channel = VOTE_CHANNEL.APP } = {}) {
   // Random ballot salt blinds the on-chain VoteCastPrivate event
   const ballotSalt = ethers.hexlify(ethers.randomBytes(32));
 
@@ -133,9 +138,16 @@ export async function relayCastVote(electionId, candidateId, voterNullifier) {
 
   // Check if this is a re-vote (VotingV3 supports changing your vote)
   try {
-    const [voted] = await getContract().getVoteStatus(voterNullifier, electionId);
+    const [voted, revisions] = await getContract().getVoteStatus(voterNullifier, electionId);
     isRevote = voted;
-  } catch {
+    const onChainCasts = voted ? Number(revisions) + 1 : 0;
+    if (channel !== VOTE_CHANNEL.STATION && onChainCasts >= MAX_APP_VOTES) {
+      const limitErr = new Error('vote limit reached');
+      limitErr.code = 'VOTE_LIMIT_REACHED';
+      throw limitErr;
+    }
+  } catch (statusErr) {
+    if (statusErr?.code === 'VOTE_LIMIT_REACHED') throw statusErr;
     // Should not happen with VotingV3 — log but don't fail
     console.warn('[relay] getVoteStatus failed — treating as first vote');
   }

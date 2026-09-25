@@ -13,13 +13,14 @@ import { ethers } from 'ethers';
 import connectDB from '@/lib/db';
 import VoteActivity from '@/lib/models/VoteActivity';
 import Election from '@/lib/models/Election';
+import { getRpcUrl } from '@/lib/serverEnv';
 
 async function getReadContract() {
   const abi = (
     await import('@/lib/contracts/VotingV1.json', { assert: { type: 'json' } })
   ).default.abi;
   const provider = new ethers.JsonRpcProvider(
-    process.env.RPC_URL || 'http://127.0.0.1:8545',
+    getRpcUrl(),
   );
   return new ethers.Contract(
     process.env.NEXT_PUBLIC_CONTRACT_ADDRESS,
@@ -43,7 +44,7 @@ export async function GET(req) {
     await connectDB();
 
     const provider = new ethers.JsonRpcProvider(
-      process.env.RPC_URL || 'http://127.0.0.1:8545',
+      getRpcUrl(),
     );
 
     const [receipt, activity] = await Promise.all([

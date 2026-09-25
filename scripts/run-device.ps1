@@ -45,7 +45,7 @@ function Get-WifiLanIp {
 }
 
 function Ensure-CleartextDomain([string]$ip) {
-    $xmlPath = Join-Path $Root "app\src\main\res\xml\network_security_config.xml"
+    $xmlPath = Join-Path $Root "app\src\local\res\xml\network_security_config.xml"
     if (-not (Test-Path $xmlPath)) { return }
     $text = Get-Content $xmlPath -Raw
     if ($text -notmatch [regex]::Escape($ip)) {

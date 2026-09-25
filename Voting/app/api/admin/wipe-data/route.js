@@ -1,11 +1,11 @@
 /**
  * POST /api/admin/wipe-data
  * Wipe election-related MongoDB data (keeps organizations).
- * Body: { guardianAddress, confirm: true }
+ * Body: { confirm: true, issuedAt, signature } — signed by a guardian wallet
  */
 import { NextResponse } from "next/server";
-import { ethers } from "ethers";
 import connectDB from "@/lib/db";
+import { verifyGuardianAction } from "@/lib/guardianAuth";
 
 const COLLECTIONS = [
   "voters",
@@ -18,23 +18,9 @@ const COLLECTIONS = [
   "biometrichashes",
 ];
 
-async function isGuardianAddress(address) {
-  if (!address || !ethers.isAddress(address)) return false;
-  const normalized = address.toLowerCase();
-  const envGuardians = [
-    process.env.ADMIN_RELAY_ADDRESS,
-    process.env.GUARDIAN_1_ADDRESS,
-    process.env.GUARDIAN_2_ADDRESS,
-    process.env.GUARDIAN_3_ADDRESS,
-  ]
-    .filter(Boolean)
-    .map((a) => a.toLowerCase());
-  return envGuardians.includes(normalized);
-}
-
 export async function POST(req) {
   try {
-    const { guardianAddress, confirm } = await req.json();
+    const { confirm, issuedAt, signature } = await req.json();
 
     if (!confirm) {
       return NextResponse.json(
@@ -43,11 +29,9 @@ export async function POST(req) {
       );
     }
 
-    if (!(await isGuardianAddress(guardianAddress))) {
-      return NextResponse.json(
-        { error: "Unauthorized — guardian wallet required" },
-        { status: 403 },
-      );
+    const guardian = await verifyGuardianAction({ action: "data:wipe", issuedAt, signature });
+    if (!guardian.ok) {
+      return NextResponse.json({ error: guardian.error }, { status: 403 });
     }
 
     await connectDB();

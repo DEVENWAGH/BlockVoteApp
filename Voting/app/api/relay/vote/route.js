@@ -14,20 +14,26 @@
  * Body: { electionId, candidateId, nullifierHash }
  *
  * Security:
- *   - Requires a pre-validated server-issued vote token (JWT) in Authorization header
- *   - OR an x-relay-api-key matching ADMIN_API_KEY for server-to-server calls
+ *   - Requires an x-relay-api-key matching ADMIN_API_KEY (server-to-server only);
+ *     voters go through /api/auth/verify-otp (OTP + face check)
  *   - The nullifierHash must already be registered on-chain via bulk-register
- *   - Double-vote prevention is enforced by the smart contract (reverts if already voted)
+ *   - Same daily polling hours and 2-vote app allowance as verify-otp
  */
 import { NextResponse } from "next/server";
-import { ethers } from "ethers";
 import connectDB from "@/lib/db";
 import Voter from "@/lib/models/Voter";
 import Election from "@/lib/models/Election";
 import { relayCastVote } from "@/lib/relay";
 import { preflightCheck } from "@/lib/preflightCache";
+import { VOTE_CHANNEL } from "@/lib/voteAllowance";
+import { reserveVoteSlot, releaseVoteSlot } from "@/lib/voteLedger";
+import { hasInternalKey as hasRelayApiKey } from "@/lib/internalAuth";
 
 export async function POST(req) {
+  if (!hasRelayApiKey(req)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const body = await req.json();
     const { electionId, candidateId, nullifierHash } = body;
@@ -122,19 +128,32 @@ export async function POST(req) {
     }
 
     // ── Edge pre-flight: cache-backed double-vote guard (faster than chain read) ─
-    const preflight = await preflightCheck(nullifierHash, eid);
+    const preflight = await preflightCheck(nullifierHash, eid, { channel: VOTE_CHANNEL.APP });
     if (!preflight.allowed) {
-      return NextResponse.json({ error: preflight.reason }, { status: 403 });
+      return NextResponse.json({ error: preflight.reason, code: preflight.code }, { status: 403 });
+    }
+
+    const before = await reserveVoteSlot(voter._id, VOTE_CHANNEL.APP);
+    if (!before) {
+      return NextResponse.json(
+        { error: "Vote allowance used up or another vote is in progress." },
+        { status: 409 },
+      );
     }
 
     // ── Cast vote on-chain via relay ──────────────────────────────────────────
     // PRIVACY: Do NOT pass voter location — GPS coordinates alongside vote
     // data create a metadata channel that can identify voters.
-    const { txHash, blockNumber } = await relayCastVote(
-      eid,
-      cid,
-      nullifierHash,
-    );
+    let txHash;
+    let blockNumber;
+    try {
+      ({ txHash, blockNumber } = await relayCastVote(eid, cid, nullifierHash, {
+        channel: VOTE_CHANNEL.APP,
+      }));
+    } catch (relayErr) {
+      await releaseVoteSlot(voter._id, before);
+      throw relayErr;
+    }
 
     return NextResponse.json({
       success: true,
@@ -148,6 +167,12 @@ export async function POST(req) {
 
     // Friendly messages for common contract reverts
     const msg = err.message || "";
+    if (err?.code === "VOTE_LIMIT_REACHED") {
+      return NextResponse.json(
+        { error: "This voter has used both app votes.", code: "VOTE_LIMIT_REACHED" },
+        { status: 403 },
+      );
+    }
     if (msg.includes("already voted")) {
       return NextResponse.json(
         { error: "This voter has already cast a vote in this election." },
@@ -185,6 +210,10 @@ export async function POST(req) {
  * Check whether a voter has already voted — without exposing their identity.
  */
 export async function GET(req) {
+  if (!hasRelayApiKey(req)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const { searchParams } = new URL(req.url);
     const nullifierHash = searchParams.get("nullifierHash");

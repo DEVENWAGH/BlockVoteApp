@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import { ethers } from 'ethers';
+import { getRpcUrl } from '@/lib/serverEnv';
 
 export async function GET() {
   try {
-    const rpcUrl = process.env.RPC_URL || 'http://127.0.0.1:8545';
+    const rpcUrl = getRpcUrl();
     const provider = new ethers.JsonRpcProvider(rpcUrl);
 
     // Relayer address: derived from ADMIN_RELAY_PRIVATE_KEY or ADMIN_RELAY_ADDRESS
@@ -13,10 +14,6 @@ export async function GET() {
       const wallet = new ethers.Wallet(relayerPrivateKey);
       relayerAddress = wallet.address;
     }
-    if (!relayerAddress) {
-      relayerAddress = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8';
-    }
-
     // Gas Station address: derived from DEPLOYER_PRIVATE_KEY or NEXT_PUBLIC_DEPLOYER_ADDRESS
     const deployerPrivateKey = process.env.DEPLOYER_PRIVATE_KEY;
     let deployerAddress = process.env.NEXT_PUBLIC_DEPLOYER_ADDRESS;
@@ -24,10 +21,6 @@ export async function GET() {
       const wallet = new ethers.Wallet(deployerPrivateKey);
       deployerAddress = wallet.address;
     }
-    if (!deployerAddress) {
-      deployerAddress = '0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266';
-    }
-
     let relayerBalanceETH = '0.0000';
     let gasStationBalanceETH = '0.0000';
 

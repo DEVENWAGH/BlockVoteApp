@@ -1,20 +1,23 @@
 import { NextResponse } from 'next/server';
 import { ethers } from 'ethers';
+import { getRpcUrl } from '@/lib/serverEnv';
 
+/** Local-chain helper: tops up the relay wallet from the deployer. Disabled in production. */
 export async function POST() {
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
   try {
-    const rpcUrl = process.env.RPC_URL || 'http://127.0.0.1:8545';
+    const rpcUrl = getRpcUrl();
     const provider = new ethers.JsonRpcProvider(rpcUrl);
 
-    // Relayer address: derived from ADMIN_RELAY_PRIVATE_KEY or ADMIN_RELAY_ADDRESS
     const relayerPrivateKey = process.env.ADMIN_RELAY_PRIVATE_KEY;
     let relayerAddress = process.env.ADMIN_RELAY_ADDRESS;
     if (relayerPrivateKey && !relayerAddress) {
-      const wallet = new ethers.Wallet(relayerPrivateKey);
-      relayerAddress = wallet.address;
+      relayerAddress = new ethers.Wallet(relayerPrivateKey).address;
     }
     if (!relayerAddress) {
-      relayerAddress = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8';
+      return NextResponse.json({ error: 'Relay wallet not configured' }, { status: 400 });
     }
 
     // Deployer/Gas Station address: derived from DEPLOYER_PRIVATE_KEY

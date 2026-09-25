@@ -1,4 +1,4 @@
-/**
+﻿/**
  * lib/biometric.js
  * Biometric verification utilities
  * 
@@ -8,10 +8,7 @@
  */
 import crypto from 'crypto';
 import { RekognitionClient } from "@aws-sdk/client-rekognition";
-
-// Enforce secrets
-const IDENTITY_SECRET = process.env.SERVER_IDENTITY_SECRET || 'dev-identity-secret-change-in-prod-12345';
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-jwt-secret-change-in-prod-54321';
+import { getIdentitySecret, getJwtSecret } from './serverEnv.js';
 
 /**
  * Initializes and returns the AWS Rekognition client if credentials are set.
@@ -80,7 +77,7 @@ export function hashLandmarks(normalizedLandmarks) {
   const landmarksStr = JSON.stringify(normalizedLandmarks, Object.keys(normalizedLandmarks).sort());
   
   return crypto
-    .createHmac('sha256', IDENTITY_SECRET)
+    .createHmac('sha256', getIdentitySecret())
     .update(landmarksStr)
     .digest('hex');
 }
@@ -110,7 +107,7 @@ export function calculateSimilarity(normalizedA, normalizedB) {
   return Math.max(0, 1 - avgError);
 }
 
-// ─── Token Utilities ──────────────────────────────────────────────────────────
+// â”€â”€â”€ Token Utilities â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function base64url(buf) {
   return buf.toString('base64')
@@ -119,18 +116,27 @@ function base64url(buf) {
     .replace(/\//g, '_');
 }
 
+const BIOMETRIC_TOKEN_TTL_SECONDS = 10 * 60;
+
 /**
- * Issues a short-lived (60-second) JWT representing successful biometric authentication.
+ * Issues a short-lived JWT representing successful biometric authentication.
+ * Lives long enough to pick a candidate and enter the email OTP.
  */
 export function issueBiometricToken(nullifierHash) {
   const header = { alg: 'HS256', typ: 'JWT' };
-  const payload = { nullifierHash, authenticated: true };
+  const now = Math.floor(Date.now() / 1000);
+  const payload = {
+    nullifierHash,
+    authenticated: true,
+    iat: now,
+    exp: now + BIOMETRIC_TOKEN_TTL_SECONDS,
+  };
   
   const encodedHeader = base64url(Buffer.from(JSON.stringify(header)));
   const encodedPayload = base64url(Buffer.from(JSON.stringify(payload)));
   
   const signature = crypto
-    .createHmac('sha256', JWT_SECRET)
+    .createHmac('sha256', getJwtSecret())
     .update(`${encodedHeader}.${encodedPayload}`)
     .digest();
   
@@ -148,7 +154,7 @@ export function verifyBiometricToken(token) {
     
     const [encodedHeader, encodedPayload, encodedSignature] = parts;
     const signature = crypto
-      .createHmac('sha256', JWT_SECRET)
+      .createHmac('sha256', getJwtSecret())
       .update(`${encodedHeader}.${encodedPayload}`)
       .digest();
     
@@ -156,7 +162,8 @@ export function verifyBiometricToken(token) {
     if (encodedSignature !== expectedSignature) return null;
     
     const payload = JSON.parse(Buffer.from(encodedPayload, 'base64').toString('utf8'));
-    
+    if (!payload.exp || payload.exp < Math.floor(Date.now() / 1000)) return null;
+
     return payload;
   } catch (err) {
     console.error('Failed to verify biometric token:', err);

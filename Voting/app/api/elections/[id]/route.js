@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
+import { hasInternalKey } from '@/lib/internalAuth';
 import connectDB from '@/lib/db';
 import Election from '@/lib/models/Election';
 import Candidate from '@/lib/models/Candidate';
 import Admin from '@/lib/models/Admin';
+import { getVotingWindowStatus } from '@/lib/votingWindow';
 
 import mongoose from 'mongoose';
 
@@ -39,6 +41,7 @@ export async function GET(request, { params }) {
             )}/${encodeURIComponent(election.electionId)}`
           : '',
         candidates,
+        votingWindow: getVotingWindowStatus(election),
       },
     });
   } catch (err) {
@@ -48,6 +51,9 @@ export async function GET(request, { params }) {
 
 // PATCH /api/elections/:id  — update phase (called by event listener)
 export async function PATCH(request, { params }) {
+  if (!hasInternalKey(request)) {
+    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+  }
   try {
     await connectDB();
     const { id } = await params;

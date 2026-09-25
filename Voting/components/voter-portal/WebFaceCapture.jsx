@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Camera, Loader2 } from 'lucide-react';
 
 /**
- * Direct webcam capture for web beta voting.
+ * Direct webcam capture for polling-station voting.
  * Laptop cameras have no motion sensor — this must never wait on
  * DeviceMotion / surrounding / rotation monitoring.
  */
@@ -123,7 +123,7 @@ export default function WebFaceCapture({
       </div>
 
       <p className="text-center text-sm text-white/65">
-        Align your head and shoulders inside the guide, then capture. Web beta skips room-motion checks because laptop browsers do not expose motion sensors.
+        Align your head and shoulders inside the guide, then capture.
       </p>
 
       {localError && (

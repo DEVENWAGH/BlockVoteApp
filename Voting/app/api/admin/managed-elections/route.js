@@ -12,14 +12,15 @@ import { relayCreateElection } from "@/lib/relay";
 import { pinJSON, getIPFSUrl } from "@/lib/ipfs";
 import { ethers } from "ethers";
 import { auth } from "@/auth";
-import { getVoteDeepLink, getVoteInviteUrl, getWebPortalUrl } from "@/lib/appLinks";
+import { getVoteDeepLink, getVoteInviteUrl } from "@/lib/appLinks";
+import { getRpcUrl } from '@/lib/serverEnv';
 
 async function getReadContract() {
   const abi = (
     await import("@/lib/contracts/VotingV1.json", { assert: { type: "json" } })
   ).default.abi;
   const provider = new ethers.JsonRpcProvider(
-    process.env.RPC_URL || "http://127.0.0.1:8545",
+    getRpcUrl(),
   );
   return new ethers.Contract(
     process.env.NEXT_PUBLIC_CONTRACT_ADDRESS,
@@ -88,7 +89,6 @@ export async function GET() {
           guardianApprovedAt: db.guardianApprovedAt || null,
           ipfsCid: db.ipfsCid || "",
           inviteUrl: getVoteInviteUrl(e.id, { orgName, electionTitle: e.title }),
-          portalUrl: getWebPortalUrl(e.id, { orgName, electionTitle: e.title }),
           deepLink: getVoteDeepLink(e.id),
         };
       });
@@ -219,7 +219,6 @@ export async function POST(req) {
         ipfsCid,
         ipfsUrl: getIPFSUrl(ipfsCid),
         inviteUrl: getVoteInviteUrl(newElectionId, { orgName, electionTitle: title }),
-        portalUrl: getWebPortalUrl(newElectionId, { orgName, electionTitle: title }),
         deepLink: getVoteDeepLink(newElectionId),
       },
       { status: 201 },

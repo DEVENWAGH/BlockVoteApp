@@ -5,7 +5,14 @@ import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Mail, Lock, Eye, EyeOff, Loader2, AlertCircle, Vote } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
+import BrandLogo from '@/components/BrandLogo';
+
+function getCallbackUrl() {
+  if (typeof window === 'undefined') return '/dashboard';
+  const target = new URLSearchParams(window.location.search).get('callbackUrl') || '';
+  return target.startsWith('/') && !target.startsWith('//') ? target : '/dashboard';
+}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -29,7 +36,7 @@ export default function LoginPage() {
       if (res?.error) {
         setError('Invalid email or password. Please try again.');
       } else {
-        router.push('/dashboard');
+        router.push(getCallbackUrl());
       }
     } catch {
       setError('Something went wrong. Please try again.');
@@ -42,7 +49,7 @@ export default function LoginPage() {
     setGoogleLoading(true);
     setError('');
     try {
-      await signIn('google', { callbackUrl: '/dashboard' });
+      await signIn('google', { callbackUrl: getCallbackUrl() });
     } catch {
       setError('Google sign-in failed. Please try again.');
       setGoogleLoading(false);
@@ -59,9 +66,7 @@ export default function LoginPage() {
       >
         {/* Logo and header */}
         <div className="flex flex-col items-center mb-8 space-y-4">
-          <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
-            <Vote size={18} className="text-white" />
-          </div>
+          <BrandLogo size={40} />
           <div className="text-center">
             <h1 className="text-2xl font-display font-normal text-ink tracking-tight">Sign in to Block Vote</h1>
             <p className="text-body text-sm mt-1">Manage elections on the web — voters cast ballots in the app</p>

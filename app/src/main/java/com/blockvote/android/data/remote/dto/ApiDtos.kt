@@ -19,7 +19,15 @@ data class ElectionDetailDto(
     val orgName: String? = null,
     val canonicalVoteUrl: String? = null,
     val txHash: String? = null,
-    val blockNumber: Int? = null
+    val blockNumber: Int? = null,
+    val votingWindow: VotingWindowDto? = null
+)
+
+data class VotingWindowDto(
+    val open: Boolean = true,
+    val code: String? = null,
+    val reason: String? = null,
+    val hours: String? = null
 )
 
 data class AnalyticsResponse(
@@ -150,6 +158,9 @@ data class VerifyOtpResponse(
     val message: String? = null,
     val txHash: String? = null,
     val verifyUrl: String? = null,
+    val isRevote: Boolean? = null,
+    val isFinal: Boolean? = null,
+    val votesRemaining: Int? = null,
     val error: String? = null
 )
 

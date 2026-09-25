@@ -23,10 +23,10 @@
     "dev:clean": "yarn env:dev && yarn db:reset && yarn dev",
     "db:start": "docker compose up -d",
     "db:stop": "docker compose down",
-    "test": "mocha test/rateLimit.test.js test/preflightCache.test.js test/biometric.test.js --timeout 10000",
+    "test": "mocha test/rateLimit.test.js test/preflightCache.test.js test/biometric.test.js test/voteRules.test.js test/productionReadiness.test.js --timeout 10000",
     "test:contracts": "hardhat test test/VotingV3.test.js --network hardhat",
     "test:security": "hardhat test test/securityAttacks.test.js --network hardhat",
-    "test:unit": "mocha test/rateLimit.test.js test/preflightCache.test.js test/biometric.test.js --timeout 10000",
+    "test:unit": "mocha test/rateLimit.test.js test/preflightCache.test.js test/biometric.test.js test/voteRules.test.js test/productionReadiness.test.js --timeout 10000",
     "test:e2e": "hardhat run test/integration/e2e.js --network hardhat",
     "test:all": "node test/run-all-tests.js"
   },

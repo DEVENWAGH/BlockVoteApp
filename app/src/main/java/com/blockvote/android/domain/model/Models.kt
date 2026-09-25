@@ -17,7 +17,9 @@ data class Election(
     val endDate: Long = 0L,
     val phase: Int = 0,
     val guardianApproved: Boolean = false,
-    val bannerUrl: String = ""
+    val bannerUrl: String = "",
+    /** Daily polling hours from the server, e.g. "7:00 AM – 6:00 PM IST". */
+    val votingHours: String = ""
 )
 
 @Serializable
@@ -47,5 +49,7 @@ data class VoteReceipt(
     val hash: String,
     val verifyUrl: String = "",
     val electionTitle: String = "",
-    val onChainVerified: Boolean? = null
+    val onChainVerified: Boolean? = null,
+    /** Server note, e.g. whether the vote replaced an earlier one and changes left. */
+    val statusMessage: String = ""
 )

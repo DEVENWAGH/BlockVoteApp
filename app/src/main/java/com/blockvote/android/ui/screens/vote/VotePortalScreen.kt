@@ -287,6 +287,17 @@ private fun EmailStep(
             text = "Use the email your election admin registered for ${state.selectedElection?.title.orEmpty()}.",
             color = Color.White.copy(alpha = 0.75f)
         )
+        val hours = state.selectedElection?.votingHours.orEmpty()
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = buildString {
+                if (hours.isNotBlank()) append("Voting hours: $hours. ")
+                append("You can change your vote once in the app — the latest one counts. ")
+                append("A vote at a polling station is final and replaces any app vote.")
+            },
+            color = Color.White.copy(alpha = 0.55f),
+            style = MaterialTheme.typography.bodySmall
+        )
         Spacer(modifier = Modifier.height(16.dp))
         OutlinedTextField(
             value = state.emailInput,
@@ -576,6 +587,15 @@ private fun SuccessStep(state: VoteUiState, onDone: () -> Unit) {
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
         )
         if (receipt != null) {
+            if (receipt.statusMessage.isNotBlank()) {
+                Text(
+                    receipt.statusMessage,
+                    color = Color.White.copy(alpha = 0.8f),
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                )
+            }
             Text(
                 receipt.electionTitle.ifBlank { "Election" },
                 color = ElectricCyan,

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { hasInternalKey } from '@/lib/internalAuth';
 import connectDB from '@/lib/db';
 import Election from '@/lib/models/Election';
 
@@ -19,6 +20,9 @@ export async function GET(request) {
 
 // POST /api/elections  — called internally by the blockchain event listener
 export async function POST(request) {
+  if (!hasInternalKey(request)) {
+    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+  }
   try {
     await connectDB();
     const body = await request.json();

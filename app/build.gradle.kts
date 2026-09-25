@@ -20,10 +20,6 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // Overridden by product flavors; CLI still wins: -PapiBaseUrl=...
-        buildConfigField("String", "API_BASE_URL", "\"http://127.0.0.1:3000/\"")
-        buildConfigField("boolean", "USE_DEMO_DATA", "false")
-        buildConfigField("String", "APP_ENV", "\"development\"")
     }
 
     flavorDimensions += "env"
@@ -34,28 +30,22 @@ android {
             val apiBaseUrl = (project.findProperty("apiBaseUrl") as String?)
                 ?: "http://10.0.2.2:3000/"
             buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
-            buildConfigField("String", "APP_ENV", "\"development\"")
         }
         create("prod") {
             dimension = "env"
             val apiBaseUrl = (project.findProperty("apiBaseUrl") as String?)
                 ?: "https://www.devz.co.in/"
             buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
-            buildConfigField("String", "APP_ENV", "\"production\"")
         }
     }
 
     buildTypes {
-        debug {
-            buildConfigField("boolean", "USE_DEMO_DATA", "false")
-        }
         release {
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            buildConfigField("boolean", "USE_DEMO_DATA", "false")
         }
     }
     buildFeatures {

@@ -17,6 +17,7 @@ import ElectionResults from '@/components/ElectionResults';
 import ThemeToggle from '@/components/ThemeToggle';
 import PartySymbol from '@/components/PartySymbol';
 import { resolveAssetUrl } from '@/lib/urlUtils';
+import BrandLogo from '@/components/BrandLogo';
 
 const PHASE = ['Registration', 'Voting', 'Completed'];
 const PHASE_COLORS = [
@@ -883,7 +884,7 @@ function ElectionsTab() {
                               <Vote size={15} /> Voting is open
                             </h4>
                             <p className="text-body dark:text-green-400/80 text-xs mb-3">
-                              Share the app invite (opens Android). Web beta is for computers — it skips surrounding monitoring.
+                              Share the app invite (opens Android). The web ballot only opens on polling-station computers you activate.
                             </p>
                             <div className="bg-canvas border border-hairline rounded-lg px-4 py-3 flex items-center justify-between gap-3">
                               <code className="text-primary text-xs font-mono truncate">
@@ -901,9 +902,14 @@ function ElectionsTab() {
                             <p className="text-body text-xs mt-2 font-mono truncate opacity-70">
                               Deep link: {e.deepLink || `blockvote://vote/${e.id}`}
                             </p>
-                            <p className="text-body text-xs mt-1 font-mono truncate opacity-70">
-                              Web beta: {e.portalUrl || '—'}
-                            </p>
+                            <a
+                              href="/station"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-block text-xs mt-2 font-semibold text-primary hover:underline"
+                            >
+                              Set up a polling station →
+                            </a>
                           </div>
                         )}
 
@@ -954,9 +960,7 @@ export default function DashboardPage() {
         {/* Logo */}
         <div className="p-6 border-b border-hairline">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-              <Vote size={16} className="text-white" />
-            </div>
+            <BrandLogo size={32} />
             <span className="font-bold text-ink text-base tracking-tight">Block Vote</span>
           </div>
         </div>
@@ -1005,9 +1009,7 @@ export default function DashboardPage() {
       {/* Mobile Top Bar */}
       <div className="md:hidden border-b border-hairline bg-canvas px-6 py-4 flex items-center justify-between gap-3 sticky top-0 z-20">
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center">
-            <Vote size={12} className="text-white" />
-          </div>
+          <BrandLogo size={24} />
           <span className="font-bold text-ink text-sm">Block Vote</span>
         </div>
         <div className="flex items-center gap-2">

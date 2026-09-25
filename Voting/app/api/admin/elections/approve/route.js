@@ -2,7 +2,8 @@
  * POST /api/admin/elections/approve
  * Guardian approves an election → transitions it on-chain from Registration → Voting
  * 
- * Body: { electionId: number, guardianAddress: string, action: 'approve' | 'reject' }
+ * Body: { electionId, action: 'approve' | 'reject', issuedAt, signature }
+ * The guardian wallet signs guardianActionMessage({ action: 'election:<action>', target: electionId }).
  */
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
@@ -11,21 +12,30 @@ import { relayTransitionPhase } from '@/lib/relay';
 import Voter from '@/lib/models/Voter';
 import Admin from '@/lib/models/Admin';
 import { sendVoteInviteEmail } from '@/lib/mailer';
-import { getVoteDeepLink, getVoteInviteUrl, getWebPortalUrl } from '@/lib/appLinks';
+import { getVoteDeepLink, getVoteInviteUrl } from '@/lib/appLinks';
+import { verifyGuardianAction } from '@/lib/guardianAuth';
 
 export async function POST(req) {
   try {
-    const { electionId, guardianAddress, action } = await req.json();
+    const { electionId, action, issuedAt, signature } = await req.json();
 
     if (electionId === undefined || electionId === null) {
       return NextResponse.json({ error: 'electionId is required' }, { status: 400 });
     }
-    if (!guardianAddress) {
-      return NextResponse.json({ error: 'guardianAddress is required' }, { status: 400 });
-    }
     if (!action || !['approve', 'reject'].includes(action)) {
       return NextResponse.json({ error: 'action must be approve or reject' }, { status: 400 });
     }
+
+    const guardian = await verifyGuardianAction({
+      action: `election:${action}`,
+      target: String(electionId),
+      issuedAt,
+      signature,
+    });
+    if (!guardian.ok) {
+      return NextResponse.json({ error: guardian.error }, { status: 403 });
+    }
+    const guardianAddress = guardian.address;
 
     await connectDB();
 
@@ -74,10 +84,6 @@ export async function POST(req) {
       orgName,
       electionTitle: electionDoc.title,
     });
-    const portalUrl = getWebPortalUrl(String(electionId), {
-      orgName,
-      electionTitle: electionDoc.title,
-    });
     const deepLink = getVoteDeepLink(String(electionId));
 
     const voters = await Voter.find({
@@ -94,7 +100,6 @@ export async function POST(req) {
           electionTitle: electionDoc.title,
           inviteUrl,
           deepLink,
-          portalUrl,
         });
         await Voter.findByIdAndUpdate(voter._id, { inviteSentAt: new Date() });
         invitesSent++;

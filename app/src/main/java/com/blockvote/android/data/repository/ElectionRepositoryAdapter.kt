@@ -32,8 +32,9 @@ class ElectionRepositoryAdapter @Inject constructor(
                 api.getPublicElections().elections.map { dto ->
                     val endMs = (dto.endTime ?: 0L) * 1000L
                     val phase = dto.phase
+                    val ended = endMs > 0 && endMs <= System.currentTimeMillis()
                     val status = when {
-                        phase == 1 && dto.guardianApproved -> ElectionStatus.LIVE
+                        phase == 1 && dto.guardianApproved && !ended -> ElectionStatus.LIVE
                         phase == 0 -> ElectionStatus.UPCOMING
                         else -> ElectionStatus.CLOSED
                     }

@@ -1,5 +1,6 @@
 package com.blockvote.android.ui.screens.onboarding
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -9,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -27,11 +27,8 @@ import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.blockvote.android.R
-import com.blockvote.android.ui.WebPortalLinks
 import com.blockvote.android.ui.components.PrimaryGradientButton
 import com.blockvote.android.ui.theme.BlockVoteTheme
-import com.blockvote.android.ui.theme.ElectricCyan
-
 @Composable
 fun OnboardingScreen(
     onNavigateToDashboard: () -> Unit,
@@ -50,11 +47,10 @@ fun OnboardingScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Icon(
-            painter = painterResource(id = R.drawable.ic_shield),
-            contentDescription = "BlockVote Logo",
-            tint = ElectricCyan,
-            modifier = Modifier.size(96.dp)
+        Image(
+            painter = painterResource(id = R.drawable.blockvote_logo),
+            contentDescription = "BlockVote logo",
+            modifier = Modifier.size(112.dp)
         )
 
         Spacer(modifier = Modifier.height(20.dp))
@@ -101,14 +97,6 @@ fun OnboardingScreen(
             Text(
                 text = "Flagged as a twin? Request verification",
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.75f),
-                style = MaterialTheme.typography.bodyMedium
-            )
-        }
-
-        TextButton(onClick = { WebPortalLinks.open(context) }) {
-            Text(
-                text = "Vote on web (beta)",
-                color = ElectricCyan,
                 style = MaterialTheme.typography.bodyMedium
             )
         }

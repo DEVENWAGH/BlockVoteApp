@@ -13,16 +13,16 @@ const GUARDIAN_PROFILES = [
     id: 1,
     title: 'Guardian No. 1',
     role: 'Relayer Custodian',
-    address: process.env.NEXT_PUBLIC_GUARDIAN_1 || '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+    address: process.env.NEXT_PUBLIC_GUARDIAN_1 || '',
     duty: 'Holds & operates the Gas Station wallet. Responsible for voter transaction fees and node gas logistics.',
     icon: Zap,
-    color: '#0052ff', // Coinbase Blue
+    color: '#0052ff',
   },
   {
     id: 2,
     title: 'Guardian No. 2',
     role: 'Security Auditor',
-    address: process.env.NEXT_PUBLIC_GUARDIAN_2 || '0x70997970C51812dc3A010C7d01b50e0d17dc79C8',
+    address: process.env.NEXT_PUBLIC_GUARDIAN_2 || '',
     duty: 'Governance multi-sig co-signer. Responsible for verifying UUPS contract upgrade payloads and parameters.',
     icon: Shield,
     color: '#8b5cf6',
@@ -31,7 +31,7 @@ const GUARDIAN_PROFILES = [
     id: 3,
     title: 'Guardian No. 3',
     role: 'Compliance Trustee',
-    address: process.env.NEXT_PUBLIC_GUARDIAN_3 || '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC',
+    address: process.env.NEXT_PUBLIC_GUARDIAN_3 || '',
     duty: 'Governs organization registration validation and platform integrity audits.',
     icon: Award,
     color: '#05b169', // Semantic Green

@@ -11,6 +11,7 @@ import { sendOTPEmail } from "@/lib/mailer";
 import { preflightCheck } from "@/lib/preflightCache";
 import { rateLimit } from "@/lib/rateLimit";
 import { computeNullifierHash } from "@/lib/voterIdentity";
+import { getVotingWindowStatus } from "@/lib/votingWindow";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 
@@ -44,6 +45,21 @@ export async function POST(req) {
       return NextResponse.json({ error: "Election not found." }, { status: 404 });
     }
 
+    if (election.phase !== 1 || !election.guardianApproved) {
+      return NextResponse.json(
+        { error: "This election is not open for voting." },
+        { status: 403 },
+      );
+    }
+
+    const votingWindow = getVotingWindowStatus(election);
+    if (!votingWindow.open) {
+      return NextResponse.json(
+        { error: votingWindow.reason, code: votingWindow.code, votingWindow },
+        { status: 403 },
+      );
+    }
+
     const voter = await Voter.findOne({ electionId: eid, email: cleanEmail });
     if (!voter) {
       return NextResponse.json(
@@ -69,8 +85,10 @@ export async function POST(req) {
       nullifierHash = computeNullifierHash(cleanEmail);
     }
 
+    // Vote-allowance is checked after the OTP in verify-otp, so this endpoint
+    // never reveals whether someone has voted to a caller who only knows their email.
     if (voter.status === "registered") {
-      const checkResult = await preflightCheck(nullifierHash, eid);
+      const checkResult = await preflightCheck(nullifierHash, eid, { checkAllowance: false });
       if (!checkResult.allowed) {
         return NextResponse.json({ error: checkResult.reason }, { status: 403 });
       }

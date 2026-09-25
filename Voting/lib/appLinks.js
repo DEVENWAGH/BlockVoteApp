@@ -1,16 +1,13 @@
 /**
- * Shareable vote links: HTTPS landing page, web beta portal, and Android deep links.
+ * Shareable vote links: HTTPS invite page and Android deep links.
+ * Web ballots exist only on activated polling-station computers (/station).
  */
+import { getPublicBaseUrl } from './serverEnv.js';
 
 export const ANDROID_PACKAGE = 'com.blockvote.android';
 
 export function getAppBaseUrl() {
-  return (
-    process.env.NEXT_PUBLIC_APP_URL ||
-    process.env.APP_URL ||
-    process.env.NEXTAUTH_URL ||
-    'http://localhost:3000'
-  ).replace(/\/$/, '');
+  return getPublicBaseUrl();
 }
 
 function encodePathSegment(value) {
@@ -37,25 +34,13 @@ export function getVoteDeepLink(electionId) {
   return `blockvote://vote/${encodeURIComponent(String(electionId))}`;
 }
 
-/**
- * Canonical HTTPS link for both:
- * - Android app opening (via MobileAppGate redirect logic)
- * - Web beta voting (use ?web=1 query)
- */
+/** Canonical HTTPS invite link; the page opens the Android app (MobileAppGate). */
 export function getVoteInviteUrl(electionId, { orgName, electionTitle } = {}) {
-  // Backward compatibility note: old code paths that only passed electionId
-  // will now throw, because you requested no random/legacy links.
   return getCanonicalOrgElectionBaseUrl({
     orgName,
     electionName: electionTitle,
     electionId,
   });
-}
-
-/** Desktop web beta ballot — no surrounding / motion monitoring. */
-export function getWebPortalUrl(electionId, { orgName, electionTitle } = {}) {
-  const base = getVoteInviteUrl(electionId, { orgName, electionTitle });
-  return `${base}?web=1`;
 }
 
 /**

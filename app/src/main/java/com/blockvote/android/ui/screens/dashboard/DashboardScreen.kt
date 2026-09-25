@@ -1,5 +1,6 @@
 package com.blockvote.android.ui.screens.dashboard
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -34,15 +35,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.blockvote.android.R
 import com.blockvote.android.domain.model.Election
 import com.blockvote.android.domain.model.ElectionStatus
-import com.blockvote.android.ui.WebPortalLinks
 import com.blockvote.android.ui.components.ElectionStatusBadge
 import com.blockvote.android.ui.components.PrimaryGradientButton
 import com.blockvote.android.ui.theme.BlockVoteTheme
@@ -64,8 +65,6 @@ fun DashboardScreen(
     val state by viewModel.uiState.collectAsState()
     val live = state.elections.filter { it.status == ElectionStatus.LIVE }
     val other = state.elections.filter { it.status != ElectionStatus.LIVE }
-    val context = LocalContext.current
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -88,16 +87,6 @@ fun DashboardScreen(
             onClick = onNavigateToVote,
             modifier = Modifier.fillMaxWidth()
         )
-
-        TextButton(
-            onClick = { WebPortalLinks.open(context) },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(
-                text = "Vote on web (beta)",
-                color = ElectricCyan
-            )
-        }
 
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -209,12 +198,22 @@ private fun LiveVotingHeader(
             }
         }
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "BlockVote",
-                style = MaterialTheme.typography.labelMedium,
-                color = ElectricCyan,
-                fontWeight = FontWeight.SemiBold
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.blockvote_logo),
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+                Text(
+                    text = "BlockVote",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = ElectricCyan,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
             Text(
                 text = if (loading) "Syncing elections…" else "$liveCount live election${if (liveCount == 1) "" else "s"}",
                 style = MaterialTheme.typography.headlineSmall,

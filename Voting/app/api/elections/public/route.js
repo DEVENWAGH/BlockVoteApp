@@ -4,14 +4,16 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Election from '@/lib/models/Election';
+import '@/lib/models/Admin';
 import { ethers } from 'ethers';
+import { getRpcUrl } from '@/lib/serverEnv';
 
 async function getReadContract() {
   const abi = (
     await import('@/lib/contracts/VotingV1.json', { assert: { type: 'json' } })
   ).default.abi;
   const provider = new ethers.JsonRpcProvider(
-    process.env.RPC_URL || 'http://127.0.0.1:8545',
+    getRpcUrl(),
   );
   return new ethers.Contract(
     process.env.NEXT_PUBLIC_CONTRACT_ADDRESS,
@@ -69,7 +71,6 @@ export async function GET() {
         phase: c.phase ?? e.phase,
         guardianApproved: true,
         inviteUrl: basePath,
-        portalUrl: `${basePath}?web=1`,
       };
     });
 

@@ -12,27 +12,34 @@
 import connectDB from '@/lib/db';
 import Voter from '@/lib/models/Voter';
 import Election from '@/lib/models/Election';
+import { getVotingWindowStatus } from '@/lib/votingWindow';
+import { checkVoteAllowance, VOTE_CHANNEL } from '@/lib/voteAllowance';
 
 /**
  * Pre-flight validation for a vote attempt.
- * Returns { allowed: boolean, reason: string, latencyMs: number, isRevote?: boolean }
+ * Returns { allowed, reason, code, latencyMs, isRevote?, votingWindow? }
  * 
  * Checks performed (all from MongoDB cache — no blockchain query):
  * 1. Is the voter registered on-chain for this specific election?
- * 2. Has the voter already voted? (V3: allowed as re-vote, V1: blocked)
- * 3. Is the election in the Voting phase?
+ * 2. Is the election in the Voting phase?
+ * 3. Is it within the daily polling hours and the election's dates?
+ * 4. Does the voter have a ballot left? (app: 2 casts; station: final override)
+ *    Skipped when checkAllowance=false so vote status is not revealed before OTP.
  *
  * electionId is a string (bytes32 hex from the smart contract)
  */
-export async function preflightCheck(nullifierHash, electionId) {
+export async function preflightCheck(
+  nullifierHash,
+  electionId,
+  { channel = VOTE_CHANNEL.APP, checkAllowance = true } = {},
+) {
   const start = Date.now();
 
   await connectDB();
 
-  // Check 1: Is the voter registered for this election?
   const voter = await Voter.findOne(
     { nullifierHash, electionId: String(electionId), status: 'registered' },
-    { _id: 1, hasVoted: 1 }
+    { _id: 1, votesCast: 1, stationVoteFinal: 1 }
   ).lean();
 
   if (!voter) {
@@ -45,15 +52,9 @@ export async function preflightCheck(nullifierHash, electionId) {
     };
   }
 
-  // Check 2: Has the voter already voted?
-  // With V3 re-voting, we ALLOW re-votes — the smart contract handles the
-  // decrement/increment logic. We flag isRevote so the UI can inform the voter.
-  const isRevote = voter.hasVoted === true;
-
-  // Check 3: Is the election in the Voting phase?
   const election = await Election.findOne(
     { electionId: String(electionId) },
-    { phase: 1 }
+    { phase: 1, startTime: 1, endTime: 1 }
   ).lean();
 
   if (!election) {
@@ -77,14 +78,33 @@ export async function preflightCheck(nullifierHash, electionId) {
     };
   }
 
-  // All checks passed
+  const votingWindow = getVotingWindowStatus(election);
+  if (!votingWindow.open) {
+    return {
+      allowed: false,
+      reason: votingWindow.reason,
+      code: votingWindow.code,
+      votingWindow,
+      latencyMs: Date.now() - start,
+      cached: true,
+    };
+  }
+
+  if (!checkAllowance) {
+    return {
+      allowed: true,
+      reason: 'Pre-flight validation passed.',
+      code: 'ALLOWED',
+      votingWindow,
+      latencyMs: Date.now() - start,
+      cached: true,
+    };
+  }
+
+  const allowance = checkVoteAllowance(voter, channel);
   return {
-    allowed: true,
-    reason: isRevote
-      ? 'Re-vote allowed. Your previous vote will be replaced.'
-      : 'Pre-flight validation passed. Vote is eligible.',
-    code: isRevote ? 'REVOTE_ALLOWED' : 'ALLOWED',
-    isRevote,
+    ...allowance,
+    votingWindow,
     latencyMs: Date.now() - start,
     cached: true,
   };

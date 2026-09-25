@@ -5,6 +5,7 @@
  * Fallback: set DEV_SKIP_EMAIL=true to print OTP to terminal without sending.
  */
 import { Resend } from 'resend';
+import { describeVotingHours } from './votingWindow.js';
 
 let _resend = null;
 let _resendKey = null;
@@ -46,7 +47,13 @@ function resolveRecipient(to) {
     }
     throw new Error(msg);
   }
-  return process.env.RESEND_DEV_REDIRECT || to;
+  return devRedirectAddress() || to;
+}
+
+/** Redirect all mail to one inbox — honoured only outside production. */
+function devRedirectAddress() {
+  if (process.env.NODE_ENV === 'production') return '';
+  return process.env.RESEND_DEV_REDIRECT || '';
 }
 
 async function sendEmail({ to, subject, html, text, logLabel = 'email' }) {
@@ -54,9 +61,8 @@ async function sendEmail({ to, subject, html, text, logLabel = 'email' }) {
   if (!actualTo) return { skipped: true };
 
   const from = getFromAddress();
-  const actualSubject = process.env.RESEND_DEV_REDIRECT && actualTo !== to
-    ? `[→ ${to}] ${subject}`
-    : subject;
+  const redirected = Boolean(devRedirectAddress()) && actualTo !== to;
+  const actualSubject = redirected ? `[→ ${to}] ${subject}` : subject;
 
   const { data, error } = await getResendClient().emails.send({
     from,
@@ -67,11 +73,10 @@ async function sendEmail({ to, subject, html, text, logLabel = 'email' }) {
   });
 
   if (error) {
-    const keyHint = process.env.RESEND_API_KEY?.slice(0, 8) ?? 'missing';
-    throw new Error(`${error.message} (from=${from}, key=${keyHint}...)`);
+    throw new Error(`${error.message} (from=${from})`);
   }
 
-  if (process.env.RESEND_DEV_REDIRECT && actualTo !== to) {
+  if (redirected) {
     console.log(`[mailer] ${logLabel} for ${to} redirected to ${actualTo} (RESEND_DEV_REDIRECT)`);
   }
 
@@ -393,13 +398,10 @@ export async function sendVoteInviteEmail(
     electionTitle = 'Election',
     inviteUrl,
     deepLink,
-    portalUrl,
   },
 ) {
   const subject = `Cast your vote — ${electionTitle}`;
-  // Canonical inviteUrl is already in the desired URL format; webPortalUrl is optional.
-  // Do NOT auto-convert legacy /go/* to /portal/*, because you requested no backward support.
-  const webPortalUrl = portalUrl || '';
+  const hours = describeVotingHours();
 
   if (process.env.NODE_ENV === 'development' && process.env.DEV_SKIP_EMAIL === 'true') {
     console.log(`\n==================================================`);
@@ -430,8 +432,12 @@ export async function sendVoteInviteEmail(
                   <p style="margin:0 0 18px;color:#cbd5e1;font-size:15px;line-height:1.7;">
                     Hi ${voterName}, you are registered for
                     <strong style="color:#ffffff;">${electionTitle}</strong>.
-                    Open the Block Vote Android app for the full surrounding-monitor flow,
-                    or use the web beta on a computer.
+                    Vote in the Block Vote Android app between <strong style="color:#ffffff;">${hours}</strong>.
+                    You can change your app vote once if you change your mind — the latest one counts.
+                  </p>
+                  <p style="margin:0 0 18px;color:#cbd5e1;font-size:15px;line-height:1.7;">
+                    Prefer to vote in person, or were you pressured to vote a certain way? Visit your
+                    polling station. A polling-station vote is final and replaces any app vote.
                   </p>
                   <div style="text-align:center;margin:0 0 24px;">
                     <a href="${inviteUrl}" style="display:inline-block;background:#0ea5e9;color:#ffffff;text-decoration:none;padding:14px 22px;border-radius:12px;font-weight:700;">
@@ -442,17 +448,12 @@ export async function sendVoteInviteEmail(
                     If the button does not open the app, paste this link on your phone:<br />
                     <a href="${inviteUrl}" style="color:#7dd3fc;text-decoration:none;word-break:break-all;">${inviteUrl}</a>
                   </p>
-                  ${webPortalUrl ? `
-                  <p style="margin:16px 0 0;color:#64748b;font-size:13px;line-height:1.6;">
-                    Web beta (computer):<br />
-                    <a href="${webPortalUrl}" style="color:#7dd3fc;text-decoration:none;word-break:break-all;">${webPortalUrl}</a>
-                  </p>` : ''}
                 </td>
               </tr>
               <tr>
                 <td style="background:#0f172a;padding:20px 36px;border-top:1px solid #1e293b;">
                   <p style="margin:0;color:#475569;font-size:12px;text-align:center;">
-                    Block Vote · Android app recommended · Web beta on computer
+                    Block Vote · Android app · In-person polling stations
                   </p>
                 </td>
               </tr>
@@ -467,10 +468,10 @@ export async function sendVoteInviteEmail(
     `You're invited to vote in ${electionTitle}`,
     '',
     `Hi ${voterName}, you are registered for ${electionTitle}.`,
-    'Open the Block Vote Android app, or use the web beta on a computer.',
+    `Vote in the Block Vote Android app between ${hours}. You can change your app vote once — the latest one counts.`,
+    'Or vote in person at your polling station. A polling-station vote is final and replaces any app vote.',
     '',
     `Open app & cast vote: ${inviteUrl}`,
-    webPortalUrl ? `Web beta: ${webPortalUrl}` : '',
   ].join('\n');
 
   try {

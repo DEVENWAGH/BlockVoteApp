@@ -3,38 +3,10 @@
  * DELETE /api/relay/transactions — clear history (guardian only)
  */
 import { NextResponse } from 'next/server';
-import { ethers } from 'ethers';
 import connectDB from '@/lib/db';
 import RelayTransaction from '@/lib/models/RelayTransaction';
 import { getRelayBalance, getRelayAddress } from '@/lib/relay';
-
-async function isGuardianAddress(address) {
-  if (!address || !ethers.isAddress(address)) return false;
-  const normalized = address.toLowerCase();
-  const envGuardians = [
-    process.env.ADMIN_RELAY_ADDRESS,
-    process.env.GUARDIAN_1_ADDRESS,
-    process.env.GUARDIAN_2_ADDRESS,
-    process.env.GUARDIAN_3_ADDRESS,
-  ]
-    .filter(Boolean)
-    .map((a) => a.toLowerCase());
-  if (envGuardians.includes(normalized)) return true;
-
-  try {
-    const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS;
-    if (!contractAddress) return false;
-    const abi = (await import('@/lib/contracts/VotingV1.json')).default.abi;
-    const provider = new ethers.JsonRpcProvider(
-      process.env.RPC_URL || process.env.NEXT_PUBLIC_RPC_URL,
-    );
-    const contract = new ethers.Contract(contractAddress, abi, provider);
-    const onChain = await contract.getGuardians();
-    return onChain.some((g) => g.toLowerCase() === normalized);
-  } catch {
-    return false;
-  }
-}
+import { verifyGuardianAction } from '@/lib/guardianAuth';
 
 export async function GET(req) {
   try {
@@ -152,13 +124,16 @@ export async function GET(req) {
 export async function DELETE(req) {
   try {
     const body = await req.json().catch(() => ({}));
-    const { guardianAddress, before, scope } = body;
+    const { before, scope, issuedAt, signature } = body;
 
-    if (!(await isGuardianAddress(guardianAddress))) {
-      return NextResponse.json(
-        { error: 'Unauthorized — connect with a registered guardian wallet' },
-        { status: 403 },
-      );
+    const guardian = await verifyGuardianAction({
+      action: 'relay:clear-history',
+      target: scope === 'before' && before ? String(before) : 'all',
+      issuedAt,
+      signature,
+    });
+    if (!guardian.ok) {
+      return NextResponse.json({ error: guardian.error }, { status: 403 });
     }
 
     await connectDB();

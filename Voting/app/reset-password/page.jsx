@@ -4,7 +4,8 @@ import { useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Lock, Eye, EyeOff, Loader2, CheckCircle2, Vote } from 'lucide-react';
+import { Lock, Eye, EyeOff, Loader2, CheckCircle2 } from 'lucide-react';
+import BrandLogo from '@/components/BrandLogo';
 
 function ResetForm() {
   const searchParams = useSearchParams();
@@ -151,9 +152,7 @@ export default function ResetPasswordPage() {
         className="w-full max-w-[440px] bg-canvas border border-hairline rounded-xl p-8 md:p-10 shadow-sm"
       >
         <div className="flex flex-col items-center mb-8 space-y-4">
-          <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
-            <Vote size={18} className="text-white" />
-          </div>
+          <BrandLogo size={40} />
           <div className="text-center">
             <h1 className="text-2xl font-display font-normal text-ink tracking-tight">
               Set new password

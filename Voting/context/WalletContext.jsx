@@ -3,9 +3,10 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { ethers } from 'ethers';
 import contractABI from '@/lib/contracts/VotingV1.json';
+import { PUBLIC_RPC_URL } from '@/lib/publicEnv';
 
 // ⚠️ Update this after deploying VotingV1.sol (UUPS proxy)
-export const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512';
+export const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || '';
 
 const WalletContext = createContext(null);
 
@@ -21,7 +22,7 @@ export function WalletProvider({ children }) {
 
   // Initialize read-only contract directly via JsonRpcProvider (no wallet needed)
   useEffect(() => {
-    const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || 'http://127.0.0.1:8545';
+    const rpcUrl = PUBLIC_RPC_URL;
     try {
       const rpcProvider = new ethers.JsonRpcProvider(rpcUrl);
       const rc = new ethers.Contract(CONTRACT_ADDRESS, contractABI.abi, rpcProvider);
@@ -62,7 +63,7 @@ export function WalletProvider({ children }) {
     localStorage.removeItem('connectedAccount');
 
     // Restore readContract back to the default RPC provider
-    const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || 'http://127.0.0.1:8545';
+    const rpcUrl = PUBLIC_RPC_URL;
     try {
       const rpcProvider = new ethers.JsonRpcProvider(rpcUrl);
       const rc = new ethers.Contract(CONTRACT_ADDRESS, contractABI.abi, rpcProvider);

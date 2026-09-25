@@ -1,11 +1,12 @@
 import { ethers } from 'ethers';
+import { getIdentitySecret } from './serverEnv.js';
 
 /**
  * Canonical on-chain voter identity (email-scoped, no organization).
  * Same email → same nullifier across elections (biometric + double-vote binding).
  */
 export function computeNullifierHash(email) {
-  const secret = process.env.SERVER_IDENTITY_SECRET || 'dev-identity-secret-change-in-prod-12345';
+  const secret = getIdentitySecret();
   const cleanEmail = email.toLowerCase().trim();
   return ethers.keccak256(
     ethers.toUtf8Bytes(`${cleanEmail}:${secret}`),

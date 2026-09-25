@@ -4,9 +4,10 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
   ArrowRight, Shield, Zap, BarChart3, Users, Globe2,
-  Building2, GraduationCap, Briefcase, Cpu, CheckCircle2, Vote
+  Building2, GraduationCap, Briefcase, Cpu, CheckCircle2
 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
+import BrandLogo from '@/components/BrandLogo';
 
 const FEATURES = [
   {
@@ -17,7 +18,7 @@ const FEATURES = [
   {
     icon: Zap,
     title: 'Launch in Minutes',
-    desc: 'Create an election on the web, upload voters, and they cast ballots in the Android app or the web beta.',
+    desc: 'Create an election on the web, upload voters, and they cast ballots in the Android app or in person at a polling station.',
   },
   {
     icon: BarChart3,
@@ -43,7 +44,7 @@ const HOW_IT_WORKS = [
   { step: '01', title: 'Admin signs up', desc: 'Create your admin account and set up elections from the web dashboard.' },
   { step: '02', title: 'Create an election', desc: 'Set a title, description, start and end time. Add candidates with full bios and symbols.' },
   { step: '03', title: 'Invite your voters', desc: 'Upload a CSV of eligible voters. The platform registers them securely on the blockchain.' },
-  { step: '04', title: 'Collect votes & share results', desc: 'Voters cast ballots in the Android app or the web beta. Live results are public and verifiable.' },
+  { step: '04', title: 'Collect votes & share results', desc: 'Voters cast ballots in the Android app or at a polling station. Live results are public and verifiable.' },
 ];
 
 export default function LandingPage() {
@@ -54,16 +55,14 @@ export default function LandingPage() {
       <nav className="sticky top-0 z-50 border-b border-hairline bg-canvas/80 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-              <Vote size={16} className="text-white" />
-            </div>
+            <BrandLogo size={32} />
             <span className="text-lg font-black tracking-tight text-ink">Block Vote</span>
           </div>
 
           <div className="hidden md:flex items-center gap-8 text-sm font-medium text-body">
             <a href="#features" className="hover:text-ink transition">Features</a>
             <a href="#how-it-works" className="hover:text-ink transition">How it works</a>
-            <Link href="/portal" className="hover:text-ink transition">Vote (web beta)</Link>
+            <Link href="/station" className="hover:text-ink transition">Polling station</Link>
             <Link href="/elections" className="hover:text-ink transition">Results</Link>
             <Link href="/verify" className="hover:text-ink transition">Verify Vote</Link>
             <Link href="/rules" className="hover:text-ink transition">Rules & Security</Link>
@@ -119,10 +118,10 @@ export default function LandingPage() {
                 Create election free <ArrowRight size={18} />
               </Link>
               <Link
-                href="/portal"
+                href="/station"
                 className="inline-flex items-center gap-2 border border-white/20 hover:border-white/40 bg-white/5 text-white font-semibold px-8 py-4 rounded-full text-base transition-all"
               >
-                Vote on web (beta)
+                Polling station
               </Link>
             </div>
 
@@ -148,8 +147,8 @@ export default function LandingPage() {
             <div className="absolute top-10 left-10 w-[420px] bg-surface-dark-elevated border border-white/5 rounded-xl p-6 shadow-2xl">
               <div className="flex items-center justify-between border-b border-white/5 pb-4 mb-4">
                 <div>
-                  <h4 className="font-semibold text-white text-sm">Active Organization</h4>
-                  <p className="text-xs text-muted-soft">Acme University Senate</p>
+                  <h4 className="font-semibold text-white text-sm">Example election</h4>
+                  <p className="text-xs text-muted-soft">Sample dashboard view</p>
                 </div>
                 <span className="text-xs bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20 font-mono">Live</span>
               </div>
@@ -206,10 +205,10 @@ export default function LandingPage() {
       <div className="border-b border-hairline bg-surface-soft py-12">
         <div className="max-w-7xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
           {[
-            { num: '200+', label: 'Organizations' },
-            { num: '50,000+', label: 'Votes Cast' },
-            { num: '99.99%', label: 'Relayer Uptime' },
-            { num: '0',     label: 'Security Breaches' },
+            { num: '0', label: 'Crypto wallets needed' },
+            { num: '2', label: 'App votes (first + one change)' },
+            { num: '1', label: 'Final vote at a polling station' },
+            { num: '100%', label: 'Ballots on-chain' },
           ].map(({ num, label }) => (
             <div key={label} className="space-y-1">
               <p className="text-3xl md:text-4xl font-mono font-medium text-ink tracking-tight">{num}</p>
@@ -312,14 +311,12 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8 items-center border-b border-hairline pb-12 mb-12">
           
           <div className="flex items-center gap-2.5">
-            <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center">
-              <Vote size={12} className="text-white" />
-            </div>
+            <BrandLogo size={24} />
             <span className="font-bold text-ink text-base">Block Vote</span>
           </div>
 
           <div className="flex md:justify-center gap-6">
-            <Link href="/portal" className="hover:text-ink transition">Voter portal</Link>
+            <Link href="/station" className="hover:text-ink transition">Polling station</Link>
             <Link href="/elections" className="hover:text-ink transition">Public Results</Link>
             <Link href="/verify" className="hover:text-ink transition">Verify Ballots</Link>
             <Link href="/admin-auth" className="hover:text-ink transition">Guardian Portal</Link>
@@ -335,8 +332,8 @@ export default function LandingPage() {
         </div>
 
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between text-xs text-muted gap-4">
-          <p>© {new Date().getFullYear()} Block Vote. All rights reserved. Coinbase platform design analysis implementation.</p>
-          <p>Institutional Cryptographic Voting Systems v1.0.0</p>
+          <p>© {new Date().getFullYear()} Block Vote. All rights reserved.</p>
+          <p>Vote in the Android app or at your polling station.</p>
         </div>
       </footer>
 

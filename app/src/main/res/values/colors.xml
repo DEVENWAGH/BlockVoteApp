@@ -8,6 +8,7 @@
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
     <color name="brand_deep_navy">#0A0F1D</color>
+    <color name="ic_launcher_background">#041237</color>
     <color name="brand_cyan_start">#00F2FE</color>
     <color name="brand_cyan_end">#4FACFE</color>
 </resources>

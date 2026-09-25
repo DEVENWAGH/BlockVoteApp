@@ -3,7 +3,7 @@
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
 │  ANDROID APP (voters)   Invite / deep link → email → rotate scan + face  │
-│  WEB BETA (computers)   /portal → email → direct camera → ballot → OTP   │
+│  POLLING STATION (web)  /station/vote → email → camera → ballot → OTP    │
 └───────────────────────────────┬──────────────────────────────────────────┘
                                 │ HTTPS / JSON
                                 ▼
@@ -24,8 +24,15 @@
 | Surface | Who | What |
 |---------|-----|------|
 | **Web admin** (`Voting/`) | Election admins + guardians | Create elections, candidates, CSV roster, approve go-live, gas, analytics |
-| **Android app** | Voters | Cast votes with surrounding / motion liveness |
-| **Web beta** (`/portal`) | Voters on a computer | Same ballot APIs; **direct camera capture** (no surrounding monitor) |
+| **Android app** | Voters (remote) | Cast votes with 360° surrounding / motion liveness. First vote + **one change** (latest counts) |
+| **Polling station** (`/station/vote`) | Voters in person | Web ballot on an admin-activated computer; **direct camera capture** (booth is supervised, no surrounding scan). Station vote is **final** and overrides app votes |
+
+## Voting rules
+
+- **Polling hours:** 7:00 AM – 6:00 PM IST every day, inside the election's start/end dates (`lib/votingWindow.js`, env `VOTING_OPEN_TIME` / `VOTING_CLOSE_TIME` / `VOTING_TIMEZONE`). OTP and cast are refused outside hours.
+- **App allowance:** 2 casts per voter (`Voter.votesCast`), enforced atomically in Mongo (`lib/voteLedger.js`) and against the on-chain revision count in `relayCastVote`.
+- **Station override:** a station vote is always allowed unless one already exists; it sets `Voter.stationVoteFinal` and locks the voter (coercion escape hatch).
+- **Station activation:** election admin signs in at `/station`, picks the election + station name → signed httpOnly `bv_station` cookie (16 h) → admin is signed out. Web ballot links on any other computer show "vote in the app or at your polling station".
 
 Organizations are **removed**. Admins own elections via `createdBy`. Voters are scoped by `electionId` + `email`.
 

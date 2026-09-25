@@ -29,16 +29,11 @@ export async function POST(request) {
       );
     }
 
-    const result = await preflightCheck(nullifierHash, String(electionId));
+    const result = await preflightCheck(nullifierHash, String(electionId), { checkAllowance: false });
 
     return NextResponse.json(result, {
       status: result.allowed ? 200 : 403,
-      headers: {
-        // Simulate edge cache headers
-        'X-Preflight-Cache': 'HIT',
-        'X-Preflight-Latency': `${result.latencyMs}ms`,
-        'X-Edge-Location': 'local-dev',
-      },
+      headers: { 'X-Preflight-Latency': `${result.latencyMs}ms` },
     });
   } catch (err) {
     console.error('[preflight]', err);

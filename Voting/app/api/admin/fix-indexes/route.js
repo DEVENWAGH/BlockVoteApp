@@ -2,10 +2,10 @@
  * GET /api/admin/fix-indexes
  * One-time migration: drops stale indexes on the voters collection
  * that were created by old schema versions, then resyncs the current schema indexes.
- *
- * Run once by visiting: http://localhost:3000/api/admin/fix-indexes
+ * Requires a signed-in election admin.
  */
 import { NextResponse } from 'next/server';
+import { auth } from '@/auth';
 import connectDB from '@/lib/db';
 import mongoose from 'mongoose';
 import Voter from '@/lib/models/Voter';
@@ -20,6 +20,11 @@ const STALE_INDEXES = [
 
 export async function GET() {
   try {
+    const session = await auth();
+    if (!session?.user?.adminId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     await connectDB();
 
     const collection = Voter.collection; 

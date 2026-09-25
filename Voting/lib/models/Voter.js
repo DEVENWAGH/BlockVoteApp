@@ -25,6 +25,11 @@ const VoterSchema = new mongoose.Schema({
 
   /** Invite email with app deep link was sent */
   inviteSentAt:  { type: Date, default: null },
+
+  /** Ballots cast (app allows 2: first vote + one change). */
+  votesCast:        { type: Number, default: 0 },
+  /** Set once a polling-station vote is cast — no further votes from any channel. */
+  stationVoteFinal: { type: Boolean, default: false },
 }, { timestamps: true });
 
 VoterSchema.index({ electionId: 1, email: 1 }, { unique: true });

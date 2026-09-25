@@ -5,10 +5,11 @@ import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft, Shield, WifiOff, AlertTriangle, Fingerprint, Key,
-  Lock, Network, Smartphone, EyeOff, Vote, CheckCircle2, ArrowRight,
+  Lock, Network, Smartphone, EyeOff, CheckCircle2, ArrowRight,
   ShieldCheck, RefreshCw, ChevronRight, HelpCircle
 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
+import BrandLogo from '@/components/BrandLogo';
 
 const TABS = [
   {
@@ -162,9 +163,7 @@ export default function RulesPage() {
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <Link href="/" className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-                <Vote size={16} className="text-white" />
-              </div>
+              <BrandLogo size={32} />
               <span className="text-lg font-black tracking-tight text-ink">Block Vote</span>
             </Link>
           </div>
@@ -396,9 +395,7 @@ export default function RulesPage() {
           
           <div className="flex items-center gap-2.5">
             <Link href="/" className="flex items-center gap-2.5">
-              <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center">
-                <Vote size={12} className="text-white" />
-              </div>
+              <BrandLogo size={24} />
               <span className="font-bold text-ink text-base">Block Vote</span>
             </Link>
           </div>
@@ -419,8 +416,8 @@ export default function RulesPage() {
         </div>
 
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between text-xs text-muted gap-4">
-          <p>© {new Date().getFullYear()} Block Vote. All rights reserved. Coinbase platform design analysis implementation.</p>
-          <p>Institutional Cryptographic Voting Systems v1.0.0</p>
+          <p>© {new Date().getFullYear()} Block Vote. All rights reserved.</p>
+          <p>Vote in the Android app or at your polling station.</p>
         </div>
       </footer>
 

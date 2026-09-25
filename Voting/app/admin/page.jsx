@@ -12,6 +12,7 @@ import {
 import ElectionResults from '@/components/ElectionResults';
 import VoterAnalytics from '@/components/VoterAnalytics';
 import ThemeToggle from '@/components/ThemeToggle';
+import { signGuardianAction } from '@/lib/guardianMessage';
 
 /** Guardians required to approve an election go-live request (1-of-N). */
 const ELECTION_GO_LIVE_APPROVAL_THRESHOLD = 1;
@@ -63,6 +64,7 @@ function Toast({ type, msg }) {
 
 // ── Approvals Tab ────────────────────────────────────────────────────────────
 function ApprovalsTab({ account }) {
+  const { signer } = useWallet();
   const [elections, setElections] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actioning, setActioning] = useState(null);
@@ -84,10 +86,14 @@ function ApprovalsTab({ account }) {
     setMsg(null);
     setActioning(electionId);
     try {
+      const proof = await signGuardianAction(signer, {
+        action: `election:${action}`,
+        target: String(electionId),
+      });
       const r = await fetch('/api/admin/elections/approve', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ electionId, guardianAddress: account, action }),
+        body: JSON.stringify({ electionId, action, ...proof }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error);
@@ -104,10 +110,11 @@ function ApprovalsTab({ account }) {
     setMsg(null);
     setLoading(true);
     try {
+      const proof = await signGuardianAction(signer, { action: 'data:wipe' });
       const r = await fetch('/api/admin/wipe-data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ guardianAddress: account, confirm: true }),
+        body: JSON.stringify({ confirm: true, ...proof }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error);

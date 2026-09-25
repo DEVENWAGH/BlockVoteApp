@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { hasInternalKey } from '@/lib/internalAuth';
 import connectDB from '@/lib/db';
 import Candidate from '@/lib/models/Candidate';
 
@@ -27,6 +28,9 @@ export async function GET(request) {
 
 // POST /api/candidates  — called by event listener (CandidateAdded)
 export async function POST(request) {
+  if (!hasInternalKey(request)) {
+    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+  }
   try {
     await connectDB();
     const { electionId, candidateId, name, party, symbol, manifesto, txHash, blockNumber } =
@@ -46,6 +50,9 @@ export async function POST(request) {
 
 // PATCH /api/candidates  — increment voteCount (called by VoteCast event listener)
 export async function PATCH(request) {
+  if (!hasInternalKey(request)) {
+    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+  }
   try {
     await connectDB();
     const { electionId, candidateId } = await request.json();

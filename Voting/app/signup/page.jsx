@@ -8,8 +8,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Mail, Lock, Eye, EyeOff, Loader2, AlertCircle,
   Building2, GraduationCap, Briefcase, Globe2, Cpu,
-  CheckCircle2, User, Vote, ShieldCheck, RefreshCw
+  CheckCircle2, User, ShieldCheck, RefreshCw
 } from 'lucide-react';
+import BrandLogo from '@/components/BrandLogo';
 
 const ORG_TYPES = [
   { value: 'college',   label: 'University', icon: GraduationCap },
@@ -142,9 +143,7 @@ export default function SignupPage() {
       >
         {/* Header */}
         <div className="flex flex-col items-center mb-8 space-y-4">
-          <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
-            <Vote size={18} className="text-white" />
-          </div>
+          <BrandLogo size={40} />
           <div className="text-center">
             <h1 className="text-2xl font-display font-normal text-ink tracking-tight">Create admin account</h1>
             <p className="text-body text-sm mt-1">Institutional on-chain voting setup</p>

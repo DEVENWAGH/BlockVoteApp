@@ -1,24 +1,25 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AlertCircle,
   ArrowLeft,
   CheckCircle2,
-  Copy,
+  Clock,
   Eye,
   EyeOff,
+  Landmark,
   Loader2,
+  RefreshCw,
   Shield,
-  Smartphone,
-  Vote,
 } from 'lucide-react';
 import PartySymbol from '@/components/PartySymbol';
 import WebFaceCapture from '@/components/voter-portal/WebFaceCapture';
-import { requestCoarseLocation } from '@/lib/clientCoarseLocation';
+import BrandLogo from '@/components/BrandLogo';
 
 const STEPS = ['election', 'email', 'capture', 'candidate', 'otp', 'success'];
+const IDLE_RESET_MS = 2 * 60 * 1000;
+const SUCCESS_RESET_SECONDS = 20;
 
 function stepIndex(step) {
   return Math.max(0, STEPS.indexOf(step));
@@ -34,13 +35,17 @@ function normalizeCandidates(raw) {
   }));
 }
 
-export default function VoterWebPortal({ initialElectionId = '' }) {
+/**
+ * Polling-station ballot. Only rendered on a computer an election admin has
+ * activated as a station (see /station). No surroundings scan — the booth is
+ * supervised. A vote cast here is final and overrides any app vote.
+ */
+export default function VoterWebPortal({ station }) {
+  const electionId = station.electionId;
   const [step, setStep] = useState('election');
-  const [electionId, setElectionId] = useState(initialElectionId || '');
   const [captureKey, setCaptureKey] = useState(0);
   const [election, setElection] = useState(null);
   const [candidates, setCandidates] = useState([]);
-  const [liveElections, setLiveElections] = useState([]);
   const [email, setEmail] = useState('');
   const [nullifierHash, setNullifierHash] = useState('');
   const [biometricToken, setBiometricToken] = useState('');
@@ -48,45 +53,35 @@ export default function VoterWebPortal({ initialElectionId = '' }) {
   const [otp, setOtp] = useState('');
   const [revealCandidate, setRevealCandidate] = useState(false);
   const [txHash, setTxHash] = useState('');
-  const [verifyUrl, setVerifyUrl] = useState('');
+  const [resultMessage, setResultMessage] = useState('');
+  const [resetIn, setResetIn] = useState(SUCCESS_RESET_SECONDS);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
-  useEffect(() => {
-    if (initialElectionId) {
-      openElection(initialElectionId, { silent: false });
-    }
-    fetch('/api/elections/public')
-      .then((r) => r.json())
-      .then((data) => setLiveElections(data.elections || []))
-      .catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialElectionId]);
+  const idleTimer = useRef(null);
 
   const setErr = (msg) => setError(msg || '');
 
-  const openElection = useCallback(async (id, { silent } = {}) => {
-    const eid = (id || '').trim();
-    if (!eid) {
-      setErr('Enter the election ID from your invite.');
-      return;
-    }
+  const openElection = useCallback(async () => {
     setLoading(true);
     setErr('');
     try {
-      const res = await fetch(`/api/elections/${encodeURIComponent(eid)}`);
+      const res = await fetch(`/api/elections/${encodeURIComponent(electionId)}`);
       const data = await res.json();
       if (!res.ok || !data.data) {
         throw new Error(data.error || 'Election not found.');
       }
       const e = data.data;
+      setElection(e);
       if (e.phase !== 1 || !e.guardianApproved) {
         throw new Error('This election is not open for voting yet.');
+      }
+      if (e.votingWindow && !e.votingWindow.open) {
+        throw new Error(e.votingWindow.reason);
       }
       let list = normalizeCandidates(e.candidates);
       if (list.length === 0) {
         const candRes = await fetch(
-          `/api/org/admin/elections/${encodeURIComponent(e.electionId || eid)}/candidates`,
+          `/api/org/admin/elections/${encodeURIComponent(e.electionId || electionId)}/candidates`,
         );
         const candData = await candRes.json();
         list = normalizeCandidates(candData.candidates);
@@ -94,20 +89,61 @@ export default function VoterWebPortal({ initialElectionId = '' }) {
       if (list.length === 0) {
         throw new Error('No candidates are listed for this election yet.');
       }
-      setElectionId(e.electionId || eid);
-      setElection(e);
       setCandidates(list);
-      setSelectedCandidateId('');
-      setBiometricToken('');
-      setNullifierHash('');
-      setOtp('');
       setStep('email');
     } catch (err) {
-      if (!silent) setErr(err.message || 'Could not open this election.');
+      setStep('election');
+      setErr(err.message || 'Could not open this election.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [electionId]);
+
+  const resetForNextVoter = useCallback(() => {
+    setEmail('');
+    setNullifierHash('');
+    setBiometricToken('');
+    setSelectedCandidateId('');
+    setOtp('');
+    setRevealCandidate(false);
+    setTxHash('');
+    setResultMessage('');
+    setResetIn(SUCCESS_RESET_SECONDS);
+    setCaptureKey((k) => k + 1);
+    setErr('');
+    openElection();
+  }, [openElection]);
+
+  useEffect(() => {
+    openElection();
+  }, [openElection]);
+
+  // Abandoned ballots are cleared so the next voter never sees someone else's session.
+  useEffect(() => {
+    if (step === 'election' || step === 'success') return undefined;
+    const arm = () => {
+      window.clearTimeout(idleTimer.current);
+      idleTimer.current = window.setTimeout(resetForNextVoter, IDLE_RESET_MS);
+    };
+    arm();
+    window.addEventListener('pointerdown', arm);
+    window.addEventListener('keydown', arm);
+    return () => {
+      window.clearTimeout(idleTimer.current);
+      window.removeEventListener('pointerdown', arm);
+      window.removeEventListener('keydown', arm);
+    };
+  }, [step, resetForNextVoter]);
+
+  useEffect(() => {
+    if (step !== 'success') return undefined;
+    if (resetIn <= 0) {
+      resetForNextVoter();
+      return undefined;
+    }
+    const t = window.setTimeout(() => setResetIn((s) => s - 1), 1000);
+    return () => window.clearTimeout(t);
+  }, [step, resetIn, resetForNextVoter]);
 
   const submitEmail = async (e) => {
     e.preventDefault();
@@ -197,13 +233,6 @@ export default function VoterWebPortal({ initialElectionId = '' }) {
     setLoading(true);
     setErr('');
     try {
-      let location = null;
-      try {
-        location = await requestCoarseLocation();
-      } catch (locationErr) {
-        console.warn('[VoterWebPortal] coarse location skipped:', locationErr.message);
-      }
-
       const res = await fetch('/api/auth/verify-otp', {
         method: 'POST',
         headers: {
@@ -216,7 +245,6 @@ export default function VoterWebPortal({ initialElectionId = '' }) {
           electionId,
           candidateId: Number(selectedCandidateId),
           biometricToken,
-          location,
         }),
       });
       const data = await res.json();
@@ -224,7 +252,8 @@ export default function VoterWebPortal({ initialElectionId = '' }) {
         throw new Error(data.error || 'Vote failed.');
       }
       setTxHash(data.txHash);
-      setVerifyUrl(data.verifyUrl || `/verify?txHash=${encodeURIComponent(data.txHash)}`);
+      setResultMessage(data.message || '');
+      setResetIn(SUCCESS_RESET_SECONDS);
       setStep('success');
     } catch (err) {
       setErr(err.message);
@@ -236,7 +265,7 @@ export default function VoterWebPortal({ initialElectionId = '' }) {
   const goBack = () => {
     setErr('');
     if (step === 'email') {
-      setStep('election');
+      resetForNextVoter();
       return;
     }
     if (step === 'capture') {
@@ -254,29 +283,25 @@ export default function VoterWebPortal({ initialElectionId = '' }) {
 
   const selected = candidates.find((c) => c.id === selectedCandidateId);
   const idx = stepIndex(step);
+  const hours = election?.votingWindow?.hours;
 
   return (
     <div className="min-h-screen bg-[#0A0F1D] text-white" style={{ colorScheme: 'dark' }}>
       <header className="sticky top-0 z-20 border-b border-white/10 bg-[#0A0F1D]/85 backdrop-blur-md">
         <div className="max-w-3xl mx-auto px-5 py-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-full bg-[#0078D4] flex items-center justify-center shrink-0">
-              <Vote size={15} aria-hidden="true" />
-            </div>
+            <BrandLogo size={32} />
             <div className="min-w-0">
               <p className="font-semibold leading-none truncate">BlockVote</p>
               <p className="text-[11px] text-[#2899F5] font-semibold uppercase tracking-wider mt-1">
-                Web beta
+                Polling station
               </p>
             </div>
           </div>
-          <a
-            href={electionId ? `blockvote://vote/${encodeURIComponent(electionId)}` : 'blockvote://vote/'}
-            className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#2899F5] hover:text-white shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2899F5] rounded-full px-2 py-1"
-          >
-            <Smartphone size={16} aria-hidden="true" />
-            Use the app
-          </a>
+          <p className="inline-flex items-center gap-1.5 text-sm text-white/70 min-w-0">
+            <Landmark size={16} className="shrink-0 text-[#2899F5]" aria-hidden="true" />
+            <span className="truncate">{station.stationName}</span>
+          </p>
         </div>
       </header>
 
@@ -284,8 +309,9 @@ export default function VoterWebPortal({ initialElectionId = '' }) {
         <div className="rounded-2xl border border-[#2899F5]/25 bg-[#1A1F2C] px-4 py-3 mb-8 flex gap-3">
           <Shield className="text-[#2899F5] shrink-0 mt-0.5" size={18} aria-hidden="true" />
           <p className="text-sm text-white/75 leading-relaxed">
-            Prefer the Android app. It can scan the room with motion sensors while you vote.
-            This web beta goes straight to a webcam capture — laptops have no surrounding monitor.
+            Official polling booth — no room scan is needed here. A vote cast at this station is{' '}
+            <strong className="text-white">final</strong>: it replaces any vote you made in the app and
+            cannot be changed afterwards.
           </p>
         </div>
 
@@ -307,76 +333,38 @@ export default function VoterWebPortal({ initialElectionId = '' }) {
             className="inline-flex items-center gap-1.5 text-sm text-white/60 hover:text-white mb-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2899F5] rounded"
           >
             <ArrowLeft size={16} aria-hidden="true" />
-            Back
+            {step === 'email' ? 'Start over' : 'Back'}
           </button>
         )}
 
-        {election && step !== 'election' && (
-          <p className="text-xs font-semibold uppercase tracking-wider text-[#2899F5] mb-2">
-            {election.title}
-          </p>
+        {election && step !== 'success' && (
+          <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <p className="text-xs font-semibold uppercase tracking-wider text-[#2899F5]">
+              {election.title}
+            </p>
+            {hours && (
+              <p className="inline-flex items-center gap-1 text-xs text-white/50">
+                <Clock size={12} aria-hidden="true" />
+                Voting hours: {hours}
+              </p>
+            )}
+          </div>
         )}
 
         {step === 'election' && (
           <section className="space-y-6">
             <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-pretty">
-              Open your ballot
+              {loading ? 'Opening ballot…' : 'Ballot not available'}
             </h1>
-            <p className="text-white/65 max-w-xl">
-              Paste the election ID from your invite, or pick a live election below.
-            </p>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                openElection(electionId);
-              }}
-              className="space-y-4"
-            >
-              <label className="block space-y-1.5">
-                <span className="text-xs font-semibold uppercase tracking-wider text-white/50">
-                  Election ID
-                </span>
-                <input
-                  name="electionId"
-                  autoComplete="off"
-                  spellCheck={false}
-                  value={electionId}
-                  onChange={(e) => setElectionId(e.target.value)}
-                  placeholder="0x… or election id"
-                  className="w-full rounded-xl bg-[#12182A] border border-white/12 focus:border-[#2899F5] px-4 py-3 outline-none text-sm font-mono"
-                />
-              </label>
+            {!loading && (
               <button
-                type="submit"
-                disabled={loading}
-                className="w-full sm:w-auto rounded-full bg-[#0078D4] hover:bg-[#2899F5] disabled:opacity-50 text-white font-semibold px-6 py-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2899F5]"
+                type="button"
+                onClick={openElection}
+                className="inline-flex items-center gap-2 rounded-full bg-[#0078D4] hover:bg-[#2899F5] text-white font-semibold px-6 py-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2899F5]"
               >
-                {loading ? 'Opening…' : 'Continue to vote'}
+                <RefreshCw size={16} aria-hidden="true" />
+                Check again
               </button>
-            </form>
-
-            {liveElections.length > 0 && (
-              <div className="space-y-3 pt-4">
-                <h2 className="text-sm font-semibold text-white/80">Live on chain</h2>
-                <ul className="space-y-2">
-                  {liveElections.map((item) => (
-                    <li key={item.id}>
-                      <button
-                        type="button"
-                        onClick={() => openElection(item.id)}
-                        className="w-full text-left rounded-xl border border-white/10 bg-[#1A1F2C] hover:border-[#2899F5]/50 px-4 py-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2899F5]"
-                      >
-                        <span className="block font-semibold truncate">{item.title}</span>
-                        {item.description ? (
-                          <span className="block text-xs text-white/45 truncate mt-0.5">
-                            {item.description}
-                          </span>
-                        ) : null}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
             )}
           </section>
         )}
@@ -385,7 +373,7 @@ export default function VoterWebPortal({ initialElectionId = '' }) {
           <section>
             <h1 className="text-3xl font-semibold tracking-tight mb-2">Verify registered email</h1>
             <p className="text-white/65 mb-6">
-              Use the address your election admin put on the roster.
+              Use the address your election admin put on the roster. You will get a one-time code there.
             </p>
             <form onSubmit={submitEmail} className="space-y-4 max-w-md">
               <label className="block space-y-1.5">
@@ -395,7 +383,7 @@ export default function VoterWebPortal({ initialElectionId = '' }) {
                 <input
                   type="email"
                   name="email"
-                  autoComplete="email"
+                  autoComplete="off"
                   spellCheck={false}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -418,7 +406,7 @@ export default function VoterWebPortal({ initialElectionId = '' }) {
           <section>
             <h1 className="text-3xl font-semibold tracking-tight mb-2">Capture your face</h1>
             <p className="text-white/65 mb-6">
-              Direct webcam capture — no surrounding or motion-sensor step on web.
+              Look at the booth camera. Only you should be in the frame.
             </p>
             <WebFaceCapture
               key={captureKey}
@@ -438,7 +426,7 @@ export default function VoterWebPortal({ initialElectionId = '' }) {
         {step === 'candidate' && (
           <section>
             <h1 className="text-3xl font-semibold tracking-tight mb-2">Select your candidate</h1>
-            <p className="text-white/65 mb-6">Your choice stays on this device until you confirm with OTP.</p>
+            <p className="text-white/65 mb-6">Your choice stays on this screen until you confirm with OTP.</p>
             <div className="space-y-2">
               {candidates.map((c) => {
                 const selectedRow = selectedCandidateId === c.id;
@@ -490,6 +478,9 @@ export default function VoterWebPortal({ initialElectionId = '' }) {
                 {revealCandidate ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
+            <p className="text-sm text-amber-200/90 mb-4">
+              Confirming makes this your final vote for this election.
+            </p>
             <form onSubmit={castVote} className="space-y-4 max-w-md">
               <label className="block space-y-1.5">
                 <span className="text-xs font-semibold uppercase tracking-wider text-white/50">
@@ -511,7 +502,7 @@ export default function VoterWebPortal({ initialElectionId = '' }) {
                 disabled={loading}
                 className="w-full rounded-full bg-[#0078D4] hover:bg-[#2899F5] disabled:opacity-50 text-white font-semibold px-6 py-3 transition-colors"
               >
-                {loading ? 'Casting vote…' : 'Cast gasless vote'}
+                {loading ? 'Casting vote…' : 'Cast final vote'}
               </button>
             </form>
           </section>
@@ -520,9 +511,10 @@ export default function VoterWebPortal({ initialElectionId = '' }) {
         {step === 'success' && (
           <section className="text-center space-y-4 py-8">
             <CheckCircle2 className="mx-auto text-[#107C10]" size={64} aria-hidden="true" />
-            <h1 className="text-3xl font-semibold tracking-tight">Vote relayed on-chain</h1>
+            <h1 className="text-3xl font-semibold tracking-tight">Vote recorded</h1>
+            {resultMessage && <p className="text-white/75 text-pretty">{resultMessage}</p>}
             <p className="text-white/60 text-sm">
-              This screen does not restate your candidate choice.
+              This screen does not restate your candidate choice. Your receipt has been emailed to you.
             </p>
             {election?.title && (
               <p className="text-[#2899F5] font-semibold">{election.title}</p>
@@ -530,20 +522,18 @@ export default function VoterWebPortal({ initialElectionId = '' }) {
             {txHash && (
               <div className="rounded-xl bg-[#1A1F2C] border border-white/10 px-4 py-3">
                 <p className="font-mono text-xs break-all text-white/85">{txHash}</p>
-                <button
-                  type="button"
-                  onClick={() => navigator.clipboard.writeText(txHash)}
-                  className="mt-2 inline-flex items-center gap-1 text-xs text-[#2899F5]"
-                >
-                  <Copy size={12} aria-hidden="true" /> Copy tx hash
-                </button>
               </div>
             )}
-            {verifyUrl && (
-              <Link href={verifyUrl} className="inline-block text-sm text-[#2899F5] hover:underline">
-                Verify this ballot
-              </Link>
-            )}
+            <button
+              type="button"
+              onClick={resetForNextVoter}
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#0078D4] hover:bg-[#2899F5] text-white font-semibold px-6 py-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2899F5]"
+            >
+              Next voter
+            </button>
+            <p className="text-xs text-white/45" aria-live="polite">
+              This booth resets automatically in {resetIn}s.
+            </p>
           </section>
         )}
 
@@ -557,12 +547,6 @@ export default function VoterWebPortal({ initialElectionId = '' }) {
             {error}
           </p>
         )}
-
-        <p className="mt-10">
-          <Link href="/twin-request" className="text-sm text-white/45 hover:text-[#2899F5]">
-            Identical twin? Request admin verification
-          </Link>
-        </p>
       </main>
     </div>
   );

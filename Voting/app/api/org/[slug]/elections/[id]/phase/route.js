@@ -7,7 +7,7 @@ import connectDB from '@/lib/db';
 import Election from '@/lib/models/Election';
 import { relayTransitionPhase } from '@/lib/relay';
 import { auth } from '@/auth';
-import { getVoteDeepLink, getVoteInviteUrl, getWebPortalUrl } from '@/lib/appLinks';
+import { getVoteDeepLink, getVoteInviteUrl } from '@/lib/appLinks';
 import { sendVoteInviteEmail } from '@/lib/mailer';
 import Voter from '@/lib/models/Voter';
 
@@ -79,7 +79,6 @@ export async function POST(req, { params }) {
     if (action === 'resend-invites') {
       const orgName = session?.user?.name || session?.user?.email || 'admin';
       const inviteUrl = getVoteInviteUrl(electionId, { orgName, electionTitle: electionDoc.title });
-      const portalUrl = getWebPortalUrl(electionId, { orgName, electionTitle: electionDoc.title });
       const deepLink = getVoteDeepLink(electionId);
       const voters = await Voter.find({ electionId, status: 'registered' }).limit(500);
       let sent = 0;
@@ -90,7 +89,6 @@ export async function POST(req, { params }) {
             electionTitle: electionDoc.title,
             inviteUrl,
             deepLink,
-            portalUrl,
           });
           await Voter.findByIdAndUpdate(voter._id, { inviteSentAt: new Date() });
           sent++;

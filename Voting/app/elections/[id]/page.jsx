@@ -16,11 +16,12 @@ import ThemeToggle from '@/components/ThemeToggle';
 import PartySymbol from '@/components/PartySymbol';
 
 import contractArtifact from '@/lib/contracts/VotingV3.json';
+import { PUBLIC_RPC_URL } from '@/lib/publicEnv';
 
 // Read-only contract fetching (no wallet required)
 function getReadContract() {
   const address = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS;
-  const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || 'http://127.0.0.1:8545';
+  const rpcUrl = PUBLIC_RPC_URL;
   if (!address) return null;
   const provider = new ethers.JsonRpcProvider(rpcUrl);
   return new ethers.Contract(address, contractArtifact.abi, provider);
@@ -263,7 +264,7 @@ export default function PublicElectionDetailPage() {
 
                   <Panel title="Voting Access" icon={<LinkIcon size={16} className="text-primary" />}>
                     <p className="text-sm text-body leading-relaxed">
-                      Registered voters receive a secure invitation by email. The canonical ballot link below opens the Android app on supported phones and can fall back to the web flow.
+                      Registered voters receive a secure invitation by email. The canonical ballot link below opens the Android app on supported phones. Voters without the app can vote in person at a polling station.
                     </p>
                     <div className="mt-4 rounded-xl border border-hairline bg-surface-soft p-4">
                       <p className="text-[11px] uppercase tracking-wider text-muted font-semibold mb-2">Canonical ballot link</p>
