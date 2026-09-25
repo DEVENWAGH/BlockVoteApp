@@ -7,12 +7,14 @@ import com.blockvote.android.data.remote.BlockVoteApi
 import com.blockvote.android.data.remote.dto.BiometricVerifyRequest
 import com.blockvote.android.data.remote.dto.SendOtpRequest
 import com.blockvote.android.data.remote.dto.VerifyOtpRequest
+import com.blockvote.android.data.remote.dto.CoarseLocationDto
 import com.blockvote.android.domain.model.Candidate
 import com.blockvote.android.domain.model.Election
 import com.blockvote.android.domain.model.ElectionStatus
 import com.blockvote.android.domain.model.VoteReceipt
 import com.blockvote.android.domain.model.VoterIdentity
 import com.blockvote.android.domain.repository.VotingRepository
+import com.blockvote.android.util.CoarseLocation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -119,7 +121,8 @@ class RemoteVotingRepository @Inject constructor(
         electionId: String,
         candidateId: Int,
         biometricToken: String,
-        electionTitle: String
+        electionTitle: String,
+        location: CoarseLocation?
     ): Result<VoteReceipt> = apiCall {
         if (BuildConfig.USE_DEMO_DATA) {
             val receipt = VoteReceipt(
@@ -142,7 +145,16 @@ class RemoteVotingRepository @Inject constructor(
                 email = email.lowercase().trim(),
                 otp = otp.trim(),
                 electionId = electionId,
-                candidateId = candidateId
+                candidateId = candidateId,
+                location = location?.let {
+                    CoarseLocationDto(
+                        village = it.village.ifBlank { null },
+                        city = it.city.ifBlank { null },
+                        state = it.state.ifBlank { null },
+                        region = it.region.ifBlank { null },
+                        localityType = it.localityType.ifBlank { null }
+                    )
+                }
             )
         )
         val txHash = body.txHash ?: throw ApiException(body.error ?: "Vote failed", 500)

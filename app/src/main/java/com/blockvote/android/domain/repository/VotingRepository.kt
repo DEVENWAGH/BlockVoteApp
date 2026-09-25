@@ -4,6 +4,7 @@ import com.blockvote.android.domain.model.Candidate
 import com.blockvote.android.domain.model.Election
 import com.blockvote.android.domain.model.VoteReceipt
 import com.blockvote.android.domain.model.VoterIdentity
+import com.blockvote.android.util.CoarseLocation
 import kotlinx.coroutines.flow.Flow
 
 interface VotingRepository {
@@ -22,7 +23,8 @@ interface VotingRepository {
         electionId: String,
         candidateId: Int,
         biometricToken: String,
-        electionTitle: String = ""
+        electionTitle: String = "",
+        location: CoarseLocation? = null
     ): Result<VoteReceipt>
     suspend fun verifyOnChain(txHash: String): Result<Boolean>
     suspend fun submitTwinRequest(

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Smartphone, Vote } from 'lucide-react';
+import { Copy, ExternalLink, Smartphone, Vote } from 'lucide-react';
 import { isAndroidUserAgent, isIosUserAgent } from '@/lib/clientDevice';
 import { getAndroidIntentUrl, getVoteDeepLink } from '@/lib/appLinks';
 
@@ -15,14 +15,20 @@ export default function MobileAppGate({ electionId = '', stayHref, children }) {
   const [android, setAndroid] = useState(false);
   const [ios, setIos] = useState(false);
   const [stayOnWeb, setStayOnWeb] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const deepLink = useMemo(() => getVoteDeepLink(electionId), [electionId]);
   const intentUrl = useMemo(() => getAndroidIntentUrl(electionId), [electionId]);
-  const portalStayHref =
-    stayHref ||
-    (typeof window !== 'undefined'
-      ? `${window.location.pathname}${window.location.search}${window.location.search ? '&' : '?'}web=1`
-      : '/?web=1');
+  const stayQuerySep =
+    typeof window !== 'undefined' && window.location.search
+      ? '&'
+      : '?';
+  const browserStayHref =
+    typeof window !== 'undefined'
+      ? `${window.location.pathname}${window.location.search}${stayQuerySep}web=1`
+      : '/?web=1';
+  const portalStayHref = stayHref || browserStayHref;
+  const onLocalhost = typeof window !== 'undefined' && /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -95,6 +101,36 @@ export default function MobileAppGate({ electionId = '', stayHref, children }) {
         <p className="text-sm text-white/45 leading-relaxed">
           No store listing yet? Ask your election admin for the BlockVote APK, then return to this link.
         </p>
+
+        {onLocalhost && (
+          <div className="rounded-2xl border border-amber-400/25 bg-amber-400/10 px-4 py-3 text-left text-sm text-amber-100">
+            This is a local-dev URL. On a physical phone, `localhost` points to the phone itself, not your computer. Use your PC&apos;s LAN IP or open the app directly with the button below.
+          </div>
+        )}
+
+        <div className="grid gap-3">
+          <a
+            href={deepLink}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-white/15 hover:border-white/35 text-white font-semibold px-6 py-3.5 transition-colors"
+          >
+            <ExternalLink size={18} aria-hidden="true" />
+            Open direct app link
+          </a>
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(deepLink);
+                setCopied(true);
+                window.setTimeout(() => setCopied(false), 2000);
+              } catch {}
+            }}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-white/15 hover:border-white/35 text-white/80 hover:text-white font-semibold px-6 py-3.5 transition-colors"
+          >
+            <Copy size={18} aria-hidden="true" />
+            {copied ? 'App link copied' : 'Copy app link'}
+          </button>
+        </div>
 
         {android && (
           <p className="text-xs text-white/40">

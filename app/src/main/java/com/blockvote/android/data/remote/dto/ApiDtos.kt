@@ -15,7 +15,61 @@ data class ElectionDetailDto(
     val phase: Int = 0,
     val guardianApproved: Boolean = false,
     val endTime: String? = null,
-    val startTime: String? = null
+    val startTime: String? = null,
+    val orgName: String? = null,
+    val canonicalVoteUrl: String? = null,
+    val txHash: String? = null,
+    val blockNumber: Int? = null
+)
+
+data class AnalyticsResponse(
+    val success: Boolean? = null,
+    val data: AnalyticsDataDto? = null,
+    val error: String? = null
+)
+
+data class AnalyticsDataDto(
+    val electionId: String = "",
+    val stats: AnalyticsStatsDto? = null,
+    val hourlyDistribution: List<HourlyVoteDto> = emptyList(),
+    val demographics: AnalyticsDemographicsDto? = null
+)
+
+data class AnalyticsStatsDto(
+    val totalVotes: Int = 0,
+    val registeredVoterCount: Int = 0,
+    val turnoutRate: Double = 0.0,
+    val votesPerMinute: Double = 0.0,
+    val peakHour: PeakHourDto? = null
+)
+
+data class PeakHourDto(
+    val hour: String = "",
+    val votes: Int = 0
+)
+
+data class HourlyVoteDto(
+    val hour: String = "",
+    val count: Int = 0
+)
+
+data class AnalyticsDemographicsDto(
+    val ageGroups: Map<String, Int> = emptyMap(),
+    val genderSplit: Map<String, Int> = emptyMap(),
+    val localityTypeBuckets: Map<String, Int> = emptyMap(),
+    val cityTierBuckets: Map<String, Int> = emptyMap(),
+    val regionBuckets: Map<String, Int> = emptyMap(),
+    val stateBuckets: Map<String, Int> = emptyMap(),
+    val cityBuckets: Map<String, Int> = emptyMap(),
+    val villageBuckets: Map<String, Int> = emptyMap()
+)
+
+data class CoarseLocationDto(
+    val village: String? = null,
+    val city: String? = null,
+    val state: String? = null,
+    val region: String? = null,
+    val localityType: String? = null
 )
 
 data class ElectionsResponse(
@@ -87,7 +141,8 @@ data class VerifyOtpRequest(
     val email: String,
     val otp: String,
     val electionId: String,
-    val candidateId: Int
+    val candidateId: Int,
+    val location: CoarseLocationDto? = null
 )
 
 data class VerifyOtpResponse(

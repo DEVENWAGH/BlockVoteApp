@@ -6,10 +6,11 @@ export const metadata = {
   description: 'Cast a ballot in the BlockVote web beta.',
 };
 
-export default function OrgElectionPortalPage({ params }) {
-  const orgName = decodeURIComponent(params?.slug || '');
-  const electionName = decodeURIComponent(params?.electionName || '');
-  const electionId = decodeURIComponent(params?.electionId || '');
+export default async function OrgElectionPortalPage({ params }) {
+  const { slug, electionName: rawElectionName, electionId: rawElectionId } = await params;
+  const orgName = decodeURIComponent(slug || '');
+  const electionName = decodeURIComponent(rawElectionName || '');
+  const electionId = decodeURIComponent(rawElectionId || '');
 
   if (!orgName || !electionName || !electionId) {
     return (

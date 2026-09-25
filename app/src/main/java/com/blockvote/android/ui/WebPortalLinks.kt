@@ -6,14 +6,14 @@ import android.content.Intent
 import android.net.Uri
 import com.blockvote.android.BuildConfig
 
-/** HTTPS voter web beta, derived from the flavor API host (dev LAN vs production). */
+/** Public HTTPS election page derived from the flavor API host (dev LAN vs production). */
 object WebPortalLinks {
     fun portalUrl(electionId: String? = null): String {
         val base = BuildConfig.API_BASE_URL.trimEnd('/')
         return if (electionId.isNullOrBlank()) {
-            "$base/portal"
+            "$base/elections"
         } else {
-            "$base/portal/${Uri.encode(electionId)}"
+            "$base/elections/${Uri.encode(electionId)}"
         }
     }
 

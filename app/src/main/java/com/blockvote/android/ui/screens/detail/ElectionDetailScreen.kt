@@ -1,53 +1,64 @@
 package com.blockvote.android.ui.screens.detail
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.rounded.LocationOn
+import androidx.compose.material.icons.rounded.Shield
+import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material.icons.rounded.Timeline
+import androidx.compose.material.icons.rounded.Groups
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.blockvote.android.domain.model.Candidate
-import com.blockvote.android.domain.model.Election
-import com.blockvote.android.domain.model.ElectionStatus
-import com.blockvote.android.ui.components.ElectionStatusBadge
+import com.blockvote.android.data.remote.dto.AnalyticsDataDto
+import com.blockvote.android.data.remote.dto.ElectionDetailDto
 import com.blockvote.android.ui.components.GlassCard
-import com.blockvote.android.ui.components.PrimaryGradientButton
-import com.blockvote.android.ui.components.VoteConfirmationDialog
-import com.blockvote.android.ui.theme.BlockVoteTheme
 import com.blockvote.android.ui.theme.ElectricCyan
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.Locale
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ElectionDetailScreen(
     electionId: String,
-    onNavigateToReceipt: (String) -> Unit,
+    onNavigateToReceipt: (String) -> Unit = {},
     onBack: () -> Unit,
     viewModel: ElectionDetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val selectedCandidateId by viewModel.selectedCandidateId.collectAsState()
-    val isVoting by viewModel.isVoting.collectAsState()
-    val voteResult by viewModel.voteResult.collectAsState(initial = null)
-    
-    var showConfirmation by remember { mutableStateOf(false) }
 
     BackHandler { onBack() }
 
@@ -55,39 +66,16 @@ fun ElectionDetailScreen(
         viewModel.loadElection(electionId)
     }
 
-    LaunchedEffect(voteResult) {
-        voteResult?.let { onNavigateToReceipt(it) }
-    }
-
     Scaffold(
         topBar = {
-            @OptIn(ExperimentalMaterial3Api::class)
             TopAppBar(
-                title = { Text("Election Details") },
+                title = { Text("Election Insights") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
                     }
                 }
             )
-        },
-        bottomBar = {
-            if (uiState is ElectionDetailUiState.Success) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    tonalElevation = 8.dp,
-                    shadowElevation = 16.dp
-                ) {
-                    Box(modifier = Modifier.padding(24.dp).navigationBarsPadding()) {
-                        PrimaryGradientButton(
-                            text = if (isVoting) "Signing Vote..." else "Cast Encrypted Vote",
-                            onClick = { showConfirmation = true },
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = selectedCandidateId != null && !isVoting
-                        )
-                    }
-                }
-            }
         }
     ) { padding ->
         Box(
@@ -100,30 +88,14 @@ fun ElectionDetailScreen(
                     CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                 }
                 is ElectionDetailUiState.Success -> {
-                    ElectionDetailContent(
-                        election = state.election,
-                        selectedCandidateId = selectedCandidateId,
-                        onCandidateSelect = { viewModel.selectCandidate(it) }
-                    )
-                    
-                    if (showConfirmation) {
-                        val candidate = state.election.candidates.find { it.id == selectedCandidateId }
-                        candidate?.let {
-                            VoteConfirmationDialog(
-                                candidate = it,
-                                onConfirm = {
-                                    showConfirmation = false
-                                    viewModel.castVote(electionId)
-                                },
-                                onDismiss = { showConfirmation = false }
-                            )
-                        }
-                    }
+                    ElectionInsightContent(data = state.data)
                 }
                 is ElectionDetailUiState.Error -> {
                     Text(
                         text = state.message,
-                        modifier = Modifier.align(Alignment.Center),
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .padding(24.dp),
                         color = MaterialTheme.colorScheme.error
                     )
                 }
@@ -133,158 +105,288 @@ fun ElectionDetailScreen(
 }
 
 @Composable
-fun ElectionDetailContent(
-    election: Election,
-    selectedCandidateId: String?,
-    onCandidateSelect: (String) -> Unit
-) {
-    val dateFormat = remember { SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault()) }
-    
+private fun ElectionInsightContent(data: ElectionInsightUi) {
+    val election = data.election
+    val analytics = data.analytics
+    val stats = analytics?.stats
+    val demographics = analytics?.demographics
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(24.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
-            Column {
-                ElectionStatusBadge(status = election.status)
+            PhaseBadge(phase = election.phase)
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = election.title,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+            election.description?.takeIf { it.isNotBlank() }?.let {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = election.title,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = election.description,
-                    style = MaterialTheme.typography.bodyLarge,
+                    text = it,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "Ends on: ",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                DateChip(label = "Starts", value = formatDate(election.startTime))
+                DateChip(label = "Ends", value = formatDate(election.endTime))
+            }
+        }
+
+        if (stats != null) {
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    MetricCard(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Rounded.Groups,
+                        label = "Turnout",
+                        value = "${stats.totalVotes}/${stats.registeredVoterCount}",
+                        subtext = "${stats.turnoutRate}% registered"
                     )
-                    Text(
-                        text = dateFormat.format(Date(election.endDate)),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = ElectricCyan
+                    MetricCard(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Rounded.Speed,
+                        label = "Velocity",
+                        value = "${stats.votesPerMinute}/min",
+                        subtext = stats.peakHour?.hour?.let { "Peak ${formatHour(it)}" } ?: "Waiting for activity"
                     )
                 }
             }
         }
-        
-        item {
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Candidates",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
-        }
-        
-        items(election.candidates) { candidate ->
-            CandidateItem(
-                candidate = candidate,
-                isSelected = candidate.id == selectedCandidateId,
-                onClick = { onCandidateSelect(candidate.id) }
-            )
-        }
-        
-        item {
-            Spacer(modifier = Modifier.height(80.dp)) // Padding for bottom bar
-        }
-    }
-}
 
-@Composable
-fun CandidateItem(
-    candidate: Candidate,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    val borderWidth by animateDpAsState(if (isSelected) 2.dp else 0.dp, label = "border")
-    val borderColor = if (isSelected) ElectricCyan else Color.Transparent
-
-    GlassCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(borderWidth, borderColor, RoundedCornerShape(24.dp)),
-        onClick = onClick
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Placeholder for candidate image
-            Box(
-                modifier = Modifier
-                    .size(60.dp)
-                    .clip(CircleShape)
-                    .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f), CircleShape)
-                    .padding(4.dp),
-                contentAlignment = Alignment.Center
-            ) {
+        item {
+            InsightPanel(title = "Chain Verification", icon = Icons.Rounded.Shield) {
+                InfoRow("Election ID", shorten(election.electionId))
+                election.orgName?.takeIf { it.isNotBlank() }?.let {
+                    InfoRow("Organization", it)
+                }
+                election.txHash?.takeIf { it.isNotBlank() }?.let {
+                    InfoRow("Creation Tx", shorten(it))
+                }
+                election.blockNumber?.let {
+                    InfoRow("Block", it.toString())
+                }
                 Text(
-                    text = candidate.name.take(1),
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = ElectricCyan
-                )
-            }
-            
-            Spacer(modifier = Modifier.width(16.dp))
-            
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = candidate.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = candidate.party,
+                    text = "Aggregate analytics only. No voter identity or ballot choice is exposed.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            
-            AnimatedVisibility(visible = isSelected) {
-                Icon(
-                    imageVector = Icons.Rounded.CheckCircle,
-                    contentDescription = "Selected",
-                    tint = ElectricCyan,
-                    modifier = Modifier.size(24.dp)
-                )
+        }
+
+        analytics?.hourlyDistribution?.takeIf { it.isNotEmpty() }?.let { hourly ->
+            item {
+                InsightPanel(title = "Participation Trend", icon = Icons.Rounded.Timeline) {
+                    val max = hourly.maxOfOrNull { it.count }?.coerceAtLeast(1) ?: 1
+                    hourly.takeLast(8).forEach { entry ->
+                        Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(formatHour(entry.hour), style = MaterialTheme.typography.labelSmall)
+                                Text("${entry.count} votes", style = MaterialTheme.typography.labelSmall)
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            LinearProgressIndicator(
+                                progress = { entry.count.toFloat() / max },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(6.dp),
+                                color = ElectricCyan,
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        demographics?.let { demo ->
+            item {
+                InsightPanel(title = "Geographic Footprint", icon = Icons.Rounded.LocationOn) {
+                    BucketSection("States / regions", demo.regionBuckets)
+                    BucketSection("Cities", demo.cityBuckets)
+                    BucketSection("Villages / localities", demo.villageBuckets)
+                    if (demo.regionBuckets.isEmpty() && demo.cityBuckets.isEmpty() && demo.villageBuckets.isEmpty()) {
+                        Text(
+                            text = "Location buckets appear after voters share coarse place labels during voting.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            item {
+                InsightPanel(title = "Demographics", icon = Icons.Rounded.Groups) {
+                    BucketSection("Age groups", demo.ageGroups)
+                    BucketSection("Gender split", demo.genderSplit)
+                    BucketSection("Urban / rural mix", demo.localityTypeBuckets)
+                    BucketSection("City tiers", demo.cityTierBuckets)
+                }
+            }
+        }
+
+        election.canonicalVoteUrl?.takeIf { it.isNotBlank() }?.let { url ->
+            item {
+                InsightPanel(title = "Ballot Access", icon = Icons.Rounded.Shield) {
+                    Text(
+                        text = url,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
             }
         }
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFF0A0F1D)
 @Composable
-fun ElectionDetailPreview() {
-    val mockCandidate = Candidate("1", "John Doe", "Progressive Party", "", "", "Vision for progress.")
-    val mockElection = Election(
-        id = "1",
-        title = "Presidential Election 2026",
-        description = "General election for the president of the community. Make your voice heard and decide the future of our governance.",
-        status = ElectionStatus.LIVE,
-        candidates = listOf(
-            mockCandidate,
-            Candidate("2", "Jane Smith", "Conservative Party", "", "", "Stability and growth.")
-        ),
-        endDate = System.currentTimeMillis() + 86400000
+private fun PhaseBadge(phase: Int) {
+    val (label, color) = when (phase) {
+        2 -> "Completed" to Color(0xFF10B981)
+        1 -> "Voting Active" to Color(0xFFF59E0B)
+        else -> "Registration" to ElectricCyan
+    }
+    Surface(
+        color = color.copy(alpha = 0.15f),
+        shape = RoundedCornerShape(999.dp)
+    ) {
+        Text(
+            text = label.uppercase(),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            style = MaterialTheme.typography.labelSmall,
+            color = color,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+@Composable
+private fun DateChip(label: String, value: String) {
+    GlassCard(modifier = Modifier) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun MetricCard(
+    modifier: Modifier = Modifier,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String,
+    subtext: String
+) {
+    GlassCard(modifier = modifier) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, contentDescription = null, tint = ElectricCyan)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(label, style = MaterialTheme.typography.labelMedium)
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text(subtext, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun InsightPanel(
+    title: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    content: @Composable () -> Unit
+) {
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, contentDescription = null, tint = ElectricCyan)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        content()
+    }
+}
+
+@Composable
+private fun InfoRow(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            value,
+            style = MaterialTheme.typography.bodySmall,
+            fontFamily = FontFamily.Monospace,
+            modifier = Modifier.weight(1f),
+            textAlign = androidx.compose.ui.text.style.TextAlign.End
+        )
+    }
+}
+
+@Composable
+private fun BucketSection(title: String, buckets: Map<String, Int>) {
+    val items = buckets.entries
+        .filter { it.key.isNotBlank() && it.key != "Unknown" }
+        .sortedByDescending { it.value }
+        .take(6)
+    if (items.isEmpty()) return
+
+    Text(
+        text = title,
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(bottom = 6.dp, top = 4.dp)
     )
-    
-    BlockVoteTheme(darkTheme = true) {
-        Surface(color = MaterialTheme.colorScheme.background) {
-            ElectionDetailContent(
-                election = mockElection,
-                selectedCandidateId = "1",
-                onCandidateSelect = {}
+    val max = items.maxOf { it.value }.coerceAtLeast(1)
+    items.forEach { (label, count) ->
+        Column(modifier = Modifier.padding(vertical = 4.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(label, style = MaterialTheme.typography.bodySmall)
+                Text("$count", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            LinearProgressIndicator(
+                progress = { count.toFloat() / max },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(5.dp),
+                color = ElectricCyan
             )
         }
     }
+}
+
+private fun formatDate(raw: String?): String {
+    if (raw.isNullOrBlank()) return "—"
+    raw.toLongOrNull()?.let { epoch ->
+        val millis = if (epoch < 1_000_000_000_000L) epoch * 1000 else epoch
+        return SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault()).format(Date(millis))
+    }
+    return raw
+}
+
+private fun formatHour(raw: String): String {
+    return runCatching {
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).parse(raw)
+    }.getOrNull()?.let {
+        SimpleDateFormat("HH:mm", Locale.getDefault()).format(it)
+    } ?: raw
+}
+
+private fun shorten(value: String): String {
+    if (value.length <= 14) return value
+    return "${value.take(6)}…${value.takeLast(4)}"
 }

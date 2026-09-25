@@ -118,6 +118,12 @@ export async function POST(req) {
       const gender = (row.gender || "").trim();
       const ageRaw = (row.age || "").trim();
       const age = ageRaw ? parseInt(ageRaw, 10) : null;
+      const region = (row.region || row.state || "").trim();
+      const state = (row.state || row.region || "").trim();
+      const city = (row.city || "").trim();
+      const village = (row.village || row.locality || "").trim();
+      const localityType = (row.localityType || row.locality || "").trim();
+      const cityTier = (row.cityTier || row.tier || "").trim();
 
       const rowErrors = [];
       if (!name || name.length < 2)
@@ -140,7 +146,20 @@ export async function POST(req) {
       }
 
       seenEmails.add(email);
-      validVoters.push({ electionId, name, email, phone, gender, age });
+      validVoters.push({
+        electionId,
+        name,
+        email,
+        phone,
+        gender,
+        age,
+        region,
+        state,
+        city,
+        village,
+        localityType,
+        cityTier,
+      });
     }
 
     let upserted = 0;
@@ -156,6 +175,12 @@ export async function POST(req) {
               phone: v.phone,
               gender: v.gender,
               age: v.age,
+              region: v.region,
+              state: v.state,
+              city: v.city,
+              village: v.village,
+              localityType: v.localityType,
+              cityTier: v.cityTier,
             },
             $setOnInsert: {
               electionId,

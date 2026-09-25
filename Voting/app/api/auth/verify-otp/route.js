@@ -12,10 +12,11 @@ import { sendVoteReceiptEmail } from "@/lib/mailer";
 import bcrypt from "bcryptjs";
 import { verifyBiometricToken } from "@/lib/biometric";
 import { computeNullifierHash } from "@/lib/voterIdentity";
+import { applyCoarseLocationToVoter } from "@/lib/coarseLocation";
 
 export async function POST(req) {
   try {
-    const { email, otp, electionId, candidateId, biometricToken: bodyToken } = await req.json();
+    const { email, otp, electionId, candidateId, biometricToken: bodyToken, location } = await req.json();
     const biometricToken = req.headers.get("x-biometric-token") || bodyToken;
 
     if (
@@ -177,6 +178,12 @@ export async function POST(req) {
     const checkResult = await preflightCheck(nullifierHash, eid);
     if (!checkResult.allowed) {
       return NextResponse.json({ error: checkResult.reason }, { status: 403 });
+    }
+
+    try {
+      await applyCoarseLocationToVoter(voter._id, location);
+    } catch (locationErr) {
+      console.warn('[verify-otp] coarse location update skipped:', locationErr.message);
     }
 
     const { txHash } = await relayCastVote(eid, Number(candidateId), nullifierHash);

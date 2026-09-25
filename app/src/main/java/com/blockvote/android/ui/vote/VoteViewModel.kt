@@ -7,6 +7,7 @@ import com.blockvote.android.domain.model.Election
 import com.blockvote.android.domain.model.VoteReceipt
 import com.blockvote.android.domain.model.VoterIdentity
 import com.blockvote.android.domain.repository.VotingRepository
+import com.blockvote.android.util.CoarseLocation
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -238,7 +239,7 @@ class VoteViewModel @Inject constructor(
         }
     }
 
-    fun castVote() {
+    fun castVote(location: CoarseLocation? = null) {
         val s = _state.value
         val election = s.selectedElection ?: return
         val candidateId = s.selectedCandidateId?.toIntOrNull() ?: return
@@ -255,7 +256,8 @@ class VoteViewModel @Inject constructor(
                 electionId = election.id,
                 candidateId = candidateId,
                 biometricToken = token,
-                electionTitle = election.title
+                electionTitle = election.title,
+                location = location
             ).onSuccess { receipt ->
                 val verified = repository.verifyOnChain(receipt.hash).getOrNull()
                 _state.update {

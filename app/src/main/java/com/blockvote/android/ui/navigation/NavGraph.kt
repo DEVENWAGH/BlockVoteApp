@@ -91,6 +91,9 @@ fun BlockVoteNavGraph(deepLinkElectionId: String? = null) {
                     VotePortalScreen(
                         initialElectionId = key.electionId.ifBlank { null },
                         onFinished = { popOrHome() },
+                        onNavigateToElectionDetail = { electionId ->
+                            backStack.add(Route.ElectionDetail(electionId))
+                        },
                         onNavigateToTwinRequest = { electionId, email ->
                             backStack.add(Route.TwinRequest(electionId, email))
                         }

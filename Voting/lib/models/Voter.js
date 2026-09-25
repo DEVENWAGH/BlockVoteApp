@@ -9,6 +9,13 @@ const VoterSchema = new mongoose.Schema({
   gender:        { type: String, default: '' },
   age:           { type: Number, default: null },
   memberId:      { type: String, default: '' },
+  region:        { type: String, default: '', trim: true },
+  state:         { type: String, default: '', trim: true },
+  city:          { type: String, default: '', trim: true },
+  village:       { type: String, default: '', trim: true },
+  localityType:  { type: String, default: '', trim: true },
+  cityTier:      { type: String, default: '', trim: true },
+  locationCapturedAt: { type: Date, default: null },
 
   nullifierHash: { type: String, default: '' },
   status:        { type: String, enum: ['pending', 'registered', 'rejected'], default: 'pending' },

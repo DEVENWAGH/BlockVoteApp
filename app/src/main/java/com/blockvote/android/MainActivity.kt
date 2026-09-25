@@ -56,9 +56,16 @@ class MainActivity : FragmentActivity() {
         if (uri.scheme == "blockvote" && (uri.host == "vote" || uri.host == "portal")) {
             return uri.pathSegments.firstOrNull().orEmpty()
         }
-        val first = uri.pathSegments.firstOrNull() ?: return null
+        val segments = uri.pathSegments
+        val first = segments.firstOrNull() ?: return null
         if (first == "go" || first == "portal") {
-            return uri.pathSegments.getOrNull(1).orEmpty()
+            return segments.getOrNull(1).orEmpty()
+        }
+        if (first == "org") {
+            val electionIndex = segments.indexOf("election")
+            if (electionIndex != -1) {
+                return segments.getOrNull(electionIndex + 2).orEmpty()
+            }
         }
         return null
     }

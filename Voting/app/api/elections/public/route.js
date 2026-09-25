@@ -25,8 +25,8 @@ export async function GET() {
     await connectDB();
 
     const dbElections = await Election.find({
-      phase: 1,
       guardianApproved: true,
+      phase: { $in: [0, 1, 2] },
     })
       .sort({ createdAt: -1 })
       .populate({ path: 'createdBy', select: 'name' })
@@ -59,6 +59,8 @@ export async function GET() {
       const c = chainMap[e.electionId] || {};
       return {
         id: e.electionId,
+        electionId: e.electionId,
+        orgName,
         title: c.title || e.title,
         description: c.description || e.description,
         bannerUrl: c.bannerUrl || '',

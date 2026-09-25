@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Election from '@/lib/models/Election';
 import Candidate from '@/lib/models/Candidate';
+import Admin from '@/lib/models/Admin';
 
 import mongoose from 'mongoose';
 
@@ -23,7 +24,23 @@ export async function GET(request, { params }) {
       .sort({ candidateId: 1 })
       .lean();
 
-    return NextResponse.json({ success: true, data: { ...election, candidates } });
+    const admin = election.createdBy
+      ? await Admin.findById(election.createdBy).select('name').lean()
+      : null;
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        ...election,
+        orgName: admin?.name || '',
+        canonicalVoteUrl: admin?.name
+          ? `/org/${encodeURIComponent(admin.name)}/election/${encodeURIComponent(
+              election.title,
+            )}/${encodeURIComponent(election.electionId)}`
+          : '',
+        candidates,
+      },
+    });
   } catch (err) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }

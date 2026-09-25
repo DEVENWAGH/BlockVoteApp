@@ -141,7 +141,7 @@ export default function PublicResultsPage() {
                   key={election._id || election.electionId}
                 >
                   <Link
-                    href={`/elections/${election.electionId}`}
+                    href={`/elections/${election.electionId || election.id}`}
                     className="group bg-canvas border border-hairline hover:border-primary rounded-xl p-6 flex flex-col h-full transition-all shadow-sm relative overflow-hidden"
                   >
                     {isCompleted && (

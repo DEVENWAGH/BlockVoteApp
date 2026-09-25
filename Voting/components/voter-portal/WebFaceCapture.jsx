@@ -87,7 +87,7 @@ export default function WebFaceCapture({
 
   return (
     <div className="space-y-4">
-      <div className="relative mx-auto w-full max-w-md aspect-[3/4] rounded-[2rem] overflow-hidden border border-white/10 bg-black shadow-[0_0_0_1px_rgba(40,153,245,0.25)]">
+      <div className="relative mx-auto w-full max-w-md aspect-3/4 rounded-4xl overflow-hidden border border-white/10 bg-black shadow-[0_0_0_1px_rgba(40,153,245,0.25)]">
         <video
           ref={videoRef}
           playsInline
@@ -97,7 +97,16 @@ export default function WebFaceCapture({
           aria-label="Face capture preview"
         />
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <div className="h-[68%] w-[62%] rounded-[50%] border-2 border-[#2899F5]/80 shadow-[0_0_0_9999px_rgba(10,15,29,0.55)]" />
+          <div className="relative h-[72%] w-[68%] rounded-[2.25rem] border border-white/25 bg-transparent shadow-[0_0_0_9999px_rgba(10,15,29,0.58)]">
+            <div className="absolute left-4 top-4 h-8 w-8 rounded-tl-2xl border-l-2 border-t-2 border-[#7dd3fc]" />
+            <div className="absolute right-4 top-4 h-8 w-8 rounded-tr-2xl border-r-2 border-t-2 border-[#7dd3fc]" />
+            <div className="absolute bottom-4 left-4 h-8 w-8 rounded-bl-2xl border-b-2 border-l-2 border-[#7dd3fc]" />
+            <div className="absolute bottom-4 right-4 h-8 w-8 rounded-br-2xl border-b-2 border-r-2 border-[#7dd3fc]" />
+            <div className="absolute left-1/2 top-[20%] h-[56%] w-[54%] -translate-x-1/2 rounded-[999px] border border-dashed border-white/35" />
+            <div className="absolute inset-x-6 bottom-6 rounded-full bg-[#0A0F1D]/75 px-3 py-2 text-center text-[11px] font-semibold tracking-wide text-white/85 backdrop-blur-sm">
+              Align face and shoulders inside the frame
+            </div>
+          </div>
         </div>
         {!cameraReady && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0A0F1D]/90 px-6 text-center">
@@ -114,7 +123,7 @@ export default function WebFaceCapture({
       </div>
 
       <p className="text-center text-sm text-white/65">
-        Center your face in the oval, then capture. Web beta skips room-motion checks — laptops have no motion sensor.
+        Align your head and shoulders inside the guide, then capture. Web beta skips room-motion checks because laptop browsers do not expose motion sensors.
       </p>
 
       {localError && (

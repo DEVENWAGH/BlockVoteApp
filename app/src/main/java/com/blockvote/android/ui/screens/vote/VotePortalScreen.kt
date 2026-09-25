@@ -72,15 +72,20 @@ import com.blockvote.android.ui.theme.NeonIndigo
 import com.blockvote.android.ui.vote.VoteStep
 import com.blockvote.android.ui.vote.VoteUiState
 import com.blockvote.android.ui.vote.VoteViewModel
-import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import com.blockvote.android.util.CoarseLocationHelper
 import com.google.accompanist.permissions.isGranted
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberPermissionState
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun VotePortalScreen(
     initialElectionId: String? = null,
     onFinished: () -> Unit,
+    onNavigateToElectionDetail: (String) -> Unit = {},
     onNavigateToTwinRequest: (electionId: String, email: String) -> Unit = { _, _ -> },
     viewModel: VoteViewModel = hiltViewModel()
 ) {
@@ -119,7 +124,8 @@ fun VotePortalScreen(
         ) {
             VoteHeader(
                 state = state,
-                onBack = { handleBack() }
+                onBack = { handleBack() },
+                onOpenElectionDetail = onNavigateToElectionDetail
             )
             Spacer(modifier = Modifier.height(16.dp))
             StepIndicator(state.step)
@@ -164,7 +170,11 @@ fun VotePortalScreen(
 }
 
 @Composable
-private fun VoteHeader(state: VoteUiState, onBack: () -> Unit) {
+private fun VoteHeader(
+    state: VoteUiState,
+    onBack: () -> Unit,
+    onOpenElectionDetail: (String) -> Unit
+) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = onBack) {
             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
@@ -189,7 +199,20 @@ private fun VoteHeader(state: VoteUiState, onBack: () -> Unit) {
                 color = Color.White.copy(alpha = 0.65f)
             )
         }
-        Icon(Icons.Default.HowToVote, contentDescription = null, tint = ElectricCyan)
+        IconButton(
+            onClick = {
+                val electionId = state.selectedElection?.id ?: state.electionIdInput.ifBlank { null }
+                if (electionId != null) {
+                    onOpenElectionDetail(electionId)
+                }
+            }
+        ) {
+            Icon(
+                Icons.Default.HowToVote,
+                contentDescription = "Open election details",
+                tint = ElectricCyan
+            )
+        }
     }
 }
 
@@ -442,9 +465,20 @@ private fun CandidateRow(candidate: Candidate, selected: Boolean, onClick: () ->
     }
 }
 
+@OptIn(ExperimentalPermissionsApi::class)
 @Composable
 private fun OtpStep(state: VoteUiState, viewModel: VoteViewModel) {
     val selected = state.candidates.find { it.id == state.selectedCandidateId }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val locationPermission = rememberPermissionState(Manifest.permission.ACCESS_COARSE_LOCATION)
+
+    LaunchedEffect(Unit) {
+        if (!locationPermission.status.isGranted) {
+            locationPermission.launchPermissionRequest()
+        }
+    }
+
     Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
         Row(
             modifier = Modifier
@@ -477,6 +511,12 @@ private fun OtpStep(state: VoteUiState, viewModel: VoteViewModel) {
             color = Color.White.copy(alpha = 0.55f),
             style = MaterialTheme.typography.labelSmall
         )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            "Allow coarse location to improve public geography analytics. Only village/city/state labels are stored — never GPS coordinates.",
+            color = Color.White.copy(alpha = 0.55f),
+            style = MaterialTheme.typography.labelSmall
+        )
         Spacer(modifier = Modifier.height(16.dp))
         OutlinedTextField(
             value = state.otpInput,
@@ -490,7 +530,16 @@ private fun OtpStep(state: VoteUiState, viewModel: VoteViewModel) {
         Spacer(modifier = Modifier.height(20.dp))
         PrimaryGradientButton(
             text = "Cast Gasless Vote",
-            onClick = viewModel::castVote,
+            onClick = {
+                scope.launch {
+                    val location = if (CoarseLocationHelper.hasPermission(context)) {
+                        CoarseLocationHelper.resolve(context)
+                    } else {
+                        null
+                    }
+                    viewModel.castVote(location)
+                }
+            },
             modifier = Modifier.fillMaxWidth()
         )
     }

@@ -4,10 +4,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
-  PHASE, PHASE_COLOR, formatDate, serializeElection, serializeCandidate,
+  formatDate, formatAddress, serializeElection, serializeCandidate,
 } from '@/lib/contract';
 import {
-  Loader2, Trophy, ChevronLeft, AlertCircle, Calendar, Vote, User
+  Loader2, Trophy, ChevronLeft, AlertCircle, Calendar, Vote, Link as LinkIcon,
+  ShieldCheck, Activity, MapPinned, Users,
 } from 'lucide-react';
 import Link from 'next/link';
 import { ethers } from 'ethers';
@@ -28,7 +29,7 @@ function getReadContract() {
 export default function PublicElectionDetailPage() {
   const { id } = useParams();
   const [election, setElection] = useState(null);
-  const [candidates, setCandidates] = useState([]);
+  const [analytics, setAnalytics] = useState(null);
   const [results, setResults] = useState([]);
   const [winner, setWinner] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -45,20 +46,26 @@ export default function PublicElectionDetailPage() {
       const apiData = await apiRes.json();
       
       let currentElection = null;
-      let currentCandidates = [];
-
       if (apiRes.ok && apiData.data) {
         currentElection = apiData.data;
-        currentCandidates = apiData.data.candidates || [];
         setElection(currentElection);
-        setCandidates(currentCandidates);
+      }
+
+      try {
+        const analyticsRes = await fetch(`/api/analytics/${id}?public=1`);
+        const analyticsData = await analyticsRes.json();
+        if (analyticsRes.ok && analyticsData.data) {
+          setAnalytics(analyticsData.data);
+        }
+      } catch (analyticsErr) {
+        console.warn('[elections/[id]] Public analytics warning:', analyticsErr.message);
       }
 
       // 2. Try fetching live contract details (if on-chain ID present)
       const targetId = currentElection?.electionId || id;
       const contract = getReadContract();
 
-      if (contract && targetId && targetId.startsWith('0x')) {
+      if (contract && targetId?.startsWith('0x')) {
         try {
           const electionRaw = await contract.getElection(targetId);
           const e = serializeElection(electionRaw);
@@ -72,12 +79,11 @@ export default function PublicElectionDetailPage() {
             try {
               const winnerRaw = await contract.getWinner(targetId);
               setWinner(serializeCandidate(winnerRaw));
-            } catch (we) {
-              console.warn('Could not determine winner:', we);
+            } catch (error_) {
+              console.warn('Could not determine winner:', error_);
             }
           } else {
-            const cands = await contract.getCandidates(targetId);
-            setCandidates(cands.map(serializeCandidate));
+            await contract.getCandidates(targetId);
           }
         } catch (chainErr) {
           console.warn('[elections/[id]] Contract read warning:', chainErr.message);
@@ -121,6 +127,35 @@ export default function PublicElectionDetailPage() {
   }
 
   const phase = election.phase;
+  const analyticsStats = analytics?.stats;
+  const analyticsDemographics = analytics?.demographics;
+  const canonicalVoteUrl = election.canonicalVoteUrl || '';
+  const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || '';
+  const rpcUrl = process.env.NEXT_PUBLIC_RPC_URL || '';
+  const networkLabel = rpcUrl.includes('8545') ? 'Local Hardhat' : 'EVM Network';
+  let phaseLabel = 'Registration';
+  let phaseBadgeClass = 'text-primary bg-primary/5 border-primary/25';
+  if (phase === 2) {
+    phaseLabel = 'Completed';
+    phaseBadgeClass = 'text-emerald-700 bg-emerald-50 border-emerald-200';
+  } else if (phase === 1) {
+    phaseLabel = 'Voting Active';
+    phaseBadgeClass = 'text-amber-700 bg-amber-50 border-amber-200';
+  }
+  const ageGroups = Object.entries(analyticsDemographics?.ageGroups || {});
+  const genderSplit = Object.entries(analyticsDemographics?.genderSplit || {});
+  const localityTypeBuckets = Object.entries(analyticsDemographics?.localityTypeBuckets || {});
+  const cityTierBuckets = Object.entries(analyticsDemographics?.cityTierBuckets || {});
+  const regionBuckets = Object.entries(analyticsDemographics?.regionBuckets || {})
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6);
+  const cityBuckets = Object.entries(analyticsDemographics?.cityBuckets || {})
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6);
+  const villageBuckets = Object.entries(analyticsDemographics?.villageBuckets || {})
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6);
+  const hourly = analytics?.hourlyDistribution || [];
 
   return (
     <div className="min-h-screen bg-canvas text-ink flex flex-col font-sans">
@@ -144,15 +179,11 @@ export default function PublicElectionDetailPage() {
         
         {/* Banner */}
         <div className="bg-canvas border border-hairline rounded-xl p-8 md:p-10 mb-8 shadow-sm relative overflow-hidden">
-          <div className={`absolute top-0 left-0 w-full h-1 ${phase === 2 ? 'bg-gradient-to-r from-emerald-400 to-primary/85' : 'bg-primary/25'}`} />
+          <div className={`absolute top-0 left-0 w-full h-1 ${phase === 2 ? 'bg-linear-to-r from-emerald-400 to-primary/85' : 'bg-primary/25'}`} />
           
           <div className="mb-4">
-            <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border uppercase tracking-wider ${
-              phase === 2 ? 'text-emerald-700 bg-emerald-50 border-emerald-200' :
-              phase === 1 ? 'text-amber-700 bg-amber-50 border-amber-200' :
-                            'text-primary bg-primary/5 border-primary/25'
-            }`}>
-              {phase === 2 ? 'Completed' : phase === 1 ? 'Voting Active' : 'Registration'}
+            <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border uppercase tracking-wider ${phaseBadgeClass}`}>
+              {phaseLabel}
             </span>
           </div>
 
@@ -173,20 +204,150 @@ export default function PublicElectionDetailPage() {
 
         {/* Dynamic phases layout */}
         {(phase === 0 || phase === 1) && (
-          <div className="text-center py-16 bg-surface-soft/40 border border-dashed border-hairline rounded-xl shadow-sm">
-            <Vote size={36} className="text-muted mx-auto mb-4" />
-            <h2 className="text-xl font-display font-normal text-ink mb-2">
-              {phase === 0 ? 'Ballot Initialization' : 'Voting is Underway'}
-            </h2>
-            <p className="text-body text-sm max-w-md mx-auto leading-relaxed px-4">
-              {phase === 0 
-                ? 'The ballot registry is currently being initialized. Dynamic updates will appear here once official polling starts.'
-                : 'Ballot lines are open. To maintain voter secrecy, tallies remain encrypted until the election completes.'}
-            </p>
+          <div className="space-y-6">
+            <div className="text-center py-16 bg-surface-soft/40 border border-dashed border-hairline rounded-xl shadow-sm">
+              <Vote size={36} className="text-muted mx-auto mb-4" />
+              <h2 className="text-xl font-display font-normal text-ink mb-2">
+                {phase === 0 ? 'Ballot Initialization' : 'Voting is Underway'}
+              </h2>
+              <p className="text-body text-sm max-w-2xl mx-auto leading-relaxed px-4">
+                {phase === 0
+                  ? 'The ballot registry is currently being initialized. Dynamic updates will appear here once official polling starts.'
+                  : 'Ballot lines are open. To maintain voter secrecy, tallies remain hidden until the election completes. Public activity below is aggregate-only and never reveals a voter identity or candidate choice.'}
+              </p>
+              {phase === 1 && (
+                <div className="mt-6 bg-primary/5 border border-primary/20 rounded-lg p-4 max-w-2xl mx-auto text-xs text-primary font-semibold">
+                  Please use the authentication link sent to your registered email to cast your ballot. Public pages can verify election status and turnout, but only registered voters can open the ballot.
+                </div>
+              )}
+            </div>
+
             {phase === 1 && (
-              <div className="mt-6 bg-primary/5 border border-primary/20 rounded-lg p-4 max-w-sm mx-auto text-xs text-primary font-semibold">
-                Please follow the authentication link sent to your registered email to cast your ballot.
-              </div>
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <MetricCard
+                    icon={<Users size={18} className="text-primary" />}
+                    label="Turnout"
+                    value={analyticsStats ? `${analyticsStats.totalVotes} / ${analyticsStats.registeredVoterCount}` : '—'}
+                    subtext={analyticsStats ? `${analyticsStats.turnoutRate}% of registered voters` : 'Loading turnout'}
+                  />
+                  <MetricCard
+                    icon={<Activity size={18} className="text-primary" />}
+                    label="Vote velocity"
+                    value={analyticsStats ? `${analyticsStats.votesPerMinute}/min` : '—'}
+                    subtext={analyticsStats?.peakHour ? `Peak hour: ${new Date(analyticsStats.peakHour.hour).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Waiting for more activity'}
+                  />
+                  <MetricCard
+                    icon={<MapPinned size={18} className="text-primary" />}
+                    label="Public geography"
+                    value={regionBuckets.length ? `${regionBuckets.length} active regions` : 'Unknown'}
+                    subtext="Region/city buckets only. No exact locations."
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <Panel title="Chain Verification" icon={<ShieldCheck size={16} className="text-primary" />}>
+                    <div className="space-y-3 text-sm">
+                      <Row label="Network" value={networkLabel} />
+                      <Row label="Contract" value={formatAddress(contractAddress)} monoFull={contractAddress} />
+                      <Row label="Election ID" value={formatAddress(election.electionId || id)} monoFull={election.electionId || id} />
+                      {election.txHash ? <Row label="Creation Tx" value={formatAddress(election.txHash)} monoFull={election.txHash} /> : null}
+                      {typeof election.blockNumber === 'number' ? <Row label="Block" value={String(election.blockNumber)} /> : null}
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      <Link href="/verify" className="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline">
+                        <ShieldCheck size={15} /> Open audit explorer
+                      </Link>
+                    </div>
+                  </Panel>
+
+                  <Panel title="Voting Access" icon={<LinkIcon size={16} className="text-primary" />}>
+                    <p className="text-sm text-body leading-relaxed">
+                      Registered voters receive a secure invitation by email. The canonical ballot link below opens the Android app on supported phones and can fall back to the web flow.
+                    </p>
+                    <div className="mt-4 rounded-xl border border-hairline bg-surface-soft p-4">
+                      <p className="text-[11px] uppercase tracking-wider text-muted font-semibold mb-2">Canonical ballot link</p>
+                      <p className="font-mono text-xs text-ink break-all">
+                        {canonicalVoteUrl || 'Invite link unavailable'}
+                      </p>
+                    </div>
+                  </Panel>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <Panel title="Participation Trend" icon={<Activity size={16} className="text-primary" />}>
+                    {hourly.length === 0 ? (
+                      <p className="text-sm text-body">No live voting activity has been recorded yet.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {hourly.slice(-8).map((entry) => {
+                          const max = Math.max(...hourly.map((item) => item.count), 1);
+                          const width = `${Math.max((entry.count / max) * 100, 8)}%`;
+                          return (
+                            <div key={entry.hour} className="space-y-1.5">
+                              <div className="flex items-center justify-between text-xs text-body">
+                                <span>{new Date(entry.hour).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                <span>{entry.count} votes</span>
+                              </div>
+                              <div className="h-2 rounded-full bg-surface-strong overflow-hidden">
+                                <div className="h-full rounded-full bg-primary" style={{ width }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </Panel>
+
+                  <Panel title="Geographic Footprint" icon={<MapPinned size={16} className="text-primary" />}>
+                    {regionBuckets.length === 0 && cityBuckets.length === 0 && villageBuckets.length === 0 ? (
+                      <p className="text-sm text-body">Region analytics appear after voters share coarse location (state, city, village). Exact GPS is never stored.</p>
+                    ) : (
+                      <div className="space-y-4">
+                        {regionBuckets.length > 0 && (
+                          <div className="space-y-3">
+                            <p className="text-[11px] uppercase tracking-wider text-muted font-semibold">States / regions</p>
+                            {regionBuckets.map(([region, count]) => (
+                              <div key={region} className="flex items-center justify-between rounded-lg border border-hairline bg-surface-soft px-3 py-2 text-sm">
+                                <span className="text-ink">{region}</span>
+                                <span className="font-semibold text-primary">{count}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {cityBuckets.length > 0 && (
+                          <div className="space-y-3">
+                            <p className="text-[11px] uppercase tracking-wider text-muted font-semibold">Cities</p>
+                            <BucketList items={cityBuckets} />
+                          </div>
+                        )}
+                        {villageBuckets.length > 0 && (
+                          <div className="space-y-3">
+                            <p className="text-[11px] uppercase tracking-wider text-muted font-semibold">Villages / localities</p>
+                            <BucketList items={villageBuckets} />
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </Panel>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  <Panel title="Age Groups" icon={<Users size={16} className="text-primary" />}>
+                    <BucketList items={ageGroups} />
+                  </Panel>
+                  <Panel title="Gender Split" icon={<Users size={16} className="text-primary" />}>
+                    <BucketList items={genderSplit} />
+                  </Panel>
+                  <Panel title="Urban / Tier Mix" icon={<MapPinned size={16} className="text-primary" />}>
+                    <div className="space-y-4">
+                      <BucketList items={localityTypeBuckets} />
+                      <div className="h-px bg-hairline" />
+                      <BucketList items={cityTierBuckets} />
+                    </div>
+                  </Panel>
+                </div>
+              </>
             )}
           </div>
         )}
@@ -235,7 +396,7 @@ export default function PublicElectionDetailPage() {
               </h2>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {results.map((c, rank) => {
+                {results.map((c) => {
                   const maxVotes = Math.max(...results.map(r => r.voteCount), 1);
                   const percentage = ((c.voteCount / maxVotes) * 100).toFixed(1);
                   const isWinner = winner && c.id === winner.id;
@@ -253,7 +414,7 @@ export default function PublicElectionDetailPage() {
                           </div>
                         </div>
                         <div className="text-right">
-                          <span className="text-xl font-display font-normal text-ink font-mono block leading-none">
+                          <span className="text-xl font-mono font-normal text-ink block leading-none">
                             {c.voteCount}
                           </span>
                           <span className="text-[9px] font-semibold text-muted uppercase tracking-wider mt-1 block">Votes</span>
@@ -278,6 +439,68 @@ export default function PublicElectionDetailPage() {
         )}
       </main>
 
+    </div>
+  );
+}
+
+function Panel({ title, icon, children }) {
+  return (
+    <div className="bg-canvas border border-hairline rounded-xl p-5 shadow-sm">
+      <div className="flex items-center gap-2 mb-4">
+        {icon}
+        <h3 className="text-sm font-semibold text-ink">{title}</h3>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function MetricCard({ icon, label, value, subtext }) {
+  return (
+    <div className="bg-canvas border border-hairline rounded-xl p-5 shadow-sm">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-xs font-semibold uppercase tracking-wider text-body">{label}</span>
+        {icon}
+      </div>
+      <p className="text-2xl font-display text-ink">{value}</p>
+      <p className="text-xs text-body mt-2">{subtext}</p>
+    </div>
+  );
+}
+
+function Row({ label, value, monoFull }) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <span className="text-body">{label}</span>
+      <span className={`text-right ${monoFull ? 'font-mono text-xs text-ink break-all' : 'text-ink'}`} title={monoFull || value}>
+        {monoFull || value}
+      </span>
+    </div>
+  );
+}
+
+function BucketList({ items }) {
+  if (!items?.length) {
+    return <p className="text-sm text-body">No aggregate data yet.</p>;
+  }
+
+  const max = Math.max(...items.map(([, count]) => Number(count) || 0), 1);
+  return (
+    <div className="space-y-3">
+      {items.map(([label, count]) => (
+        <div key={label} className="space-y-1.5">
+          <div className="flex items-center justify-between text-xs text-body">
+            <span>{label}</span>
+            <span>{count}</span>
+          </div>
+          <div className="h-2 rounded-full bg-surface-strong overflow-hidden">
+            <div
+              className="h-full rounded-full bg-primary"
+              style={{ width: `${Math.max((Number(count) / max) * 100, 8)}%` }}
+            />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

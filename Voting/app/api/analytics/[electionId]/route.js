@@ -13,9 +13,25 @@ import Election from '@/lib/models/Election';
 import Voter from '@/lib/models/Voter';
 import BiometricHash from '@/lib/models/BiometricHash';
 
+function normalizeBucket(value, fallback = 'Unknown') {
+  const text = String(value || '').trim();
+  return text || fallback;
+}
+
+function countBuckets(items, mapper) {
+  const counts = {};
+  for (const item of items) {
+    const key = normalizeBucket(mapper(item));
+    counts[key] = (counts[key] || 0) + 1;
+  }
+  return counts;
+}
+
 export async function GET(request, { params }) {
   try {
     await connectDB();
+    const { searchParams } = new URL(request.url);
+    const publicMode = searchParams.get('public') === '1';
     const { electionId } = await params;
     const eid = String(electionId);
 
@@ -164,7 +180,7 @@ export async function GET(request, { params }) {
       // Rekognition genders
       const bio = bioMap[voter.nullifierHash];
       let awsGender = 'Unknown';
-      if (bio && bio.faceAttributes && bio.faceAttributes.gender) {
+      if (bio?.faceAttributes?.gender) {
         const g = bio.faceAttributes.gender.trim().toLowerCase();
         if (g === 'male') { awsGender = 'Male'; rekognitionGenders['Male']++; }
         else if (g === 'female') { awsGender = 'Female'; rekognitionGenders['Female']++; }
@@ -187,6 +203,52 @@ export async function GET(request, { params }) {
 
     // Re-vote stats (V3 feature)
     const revoteCount = await VoteActivity.countDocuments({ electionId: eid, isRevote: true });
+    const regionBuckets = countBuckets(registeredVoters, (v) => v.region || v.state);
+    const stateBuckets = countBuckets(registeredVoters, (v) => v.state || v.region);
+    const cityBuckets = countBuckets(registeredVoters, (v) => v.city);
+    const villageBuckets = countBuckets(registeredVoters, (v) => v.village);
+    const localityTypeBuckets = countBuckets(registeredVoters, (v) => v.localityType);
+    const cityTierBuckets = countBuckets(registeredVoters, (v) => v.cityTier);
+
+    const publicData = {
+      electionId: eid,
+      election: election ? {
+        title: election.title,
+        description: election.description,
+        phase: election.phase,
+        startTime: election.startTime,
+        endTime: election.endTime,
+      } : null,
+      stats: {
+        totalVotes,
+        votesLast1h,
+        votesLast24h,
+        votesPerMinute: Number(votesPerMinute),
+        peakHour: peakHour ? { hour: peakHour.hour, votes: peakHour.count } : null,
+        registeredVoterCount: registeredVoters.length,
+        turnoutRate: registeredVoters.length > 0
+          ? Number(((totalVotes / registeredVoters.length) * 100).toFixed(1))
+          : 0,
+      },
+      hourlyDistribution,
+      demographics: {
+        ageGroups,
+        genderSplit: rosterGenders,
+        localityTypeBuckets,
+        cityTierBuckets,
+        regionBuckets,
+        stateBuckets,
+        cityBuckets,
+        villageBuckets,
+      },
+    };
+
+    if (publicMode) {
+      return NextResponse.json({
+        success: true,
+        data: publicData,
+      });
+    }
 
     return NextResponse.json({
       success: true,
@@ -230,7 +292,13 @@ export async function GET(request, { params }) {
               ? Number(((genderMatches / (genderMatches + genderMismatches)) * 100).toFixed(1))
               : 100
           },
-          // PRIVACY: location analytics removed — GPS data is no longer collected
+          localityTypeBuckets,
+          cityTierBuckets,
+          regionBuckets,
+          stateBuckets,
+          cityBuckets,
+          villageBuckets,
+          // PRIVACY: only coarse place labels are stored — never GPS coordinates
         }
       },
     });

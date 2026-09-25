@@ -4,6 +4,7 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.front" android:required="false" />
@@ -61,12 +62,20 @@
                     android:pathPrefix="/portal" />
                 <data
                     android:scheme="https"
+                    android:host="www.devz.co.in"
+                    android:pathPrefix="/org" />
+                <data
+                    android:scheme="https"
                     android:host="devz.co.in"
                     android:pathPrefix="/go" />
                 <data
                     android:scheme="https"
                     android:host="devz.co.in"
                     android:pathPrefix="/portal" />
+                <data
+                    android:scheme="https"
+                    android:host="devz.co.in"
+                    android:pathPrefix="/org" />
             </intent-filter>
         </activity>
     </application>

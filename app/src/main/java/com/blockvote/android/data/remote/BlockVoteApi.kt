@@ -1,6 +1,7 @@
 package com.blockvote.android.data.remote
 
 import com.blockvote.android.data.remote.dto.ApiErrorBody
+import com.blockvote.android.data.remote.dto.AnalyticsResponse
 import com.blockvote.android.data.remote.dto.AuditVerifyResponse
 import com.blockvote.android.data.remote.dto.BiometricVerifyRequest
 import com.blockvote.android.data.remote.dto.BiometricVerifyResponse
@@ -34,6 +35,13 @@ class BlockVoteApi(
 
     fun getElection(electionId: String): ElectionDetailResponse =
         getJson("api/elections/$electionId", emptyMap(), ElectionDetailResponse::class.java)
+
+    fun getPublicAnalytics(electionId: String): AnalyticsResponse =
+        getJson(
+            "api/analytics/$electionId",
+            mapOf("public" to "1"),
+            AnalyticsResponse::class.java
+        )
 
     fun getCandidates(electionId: String): CandidatesResponse =
         getJson(

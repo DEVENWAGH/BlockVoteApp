@@ -21,7 +21,29 @@ export function formatAddress(addr) {
 
 export function formatDate(ts) {
   if (!ts) return '';
-  return new Date(Number(ts) * 1000).toLocaleString();
+
+  if (ts instanceof Date) {
+    return ts.toLocaleString();
+  }
+
+  if (typeof ts === 'string') {
+    const numeric = Number(ts);
+    if (!Number.isNaN(numeric) && ts.trim() !== '') {
+      return new Date(numeric * 1000).toLocaleString();
+    }
+
+    const parsed = new Date(ts);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toLocaleString();
+    }
+    return '';
+  }
+
+  if (typeof ts === 'number') {
+    return new Date(ts * 1000).toLocaleString();
+  }
+
+  return '';
 }
 
 export function getReadContract(provider) {

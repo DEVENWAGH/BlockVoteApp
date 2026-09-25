@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import PartySymbol from '@/components/PartySymbol';
 import WebFaceCapture from '@/components/voter-portal/WebFaceCapture';
+import { requestCoarseLocation } from '@/lib/clientCoarseLocation';
 
 const STEPS = ['election', 'email', 'capture', 'candidate', 'otp', 'success'];
 
@@ -196,6 +197,13 @@ export default function VoterWebPortal({ initialElectionId = '' }) {
     setLoading(true);
     setErr('');
     try {
+      let location = null;
+      try {
+        location = await requestCoarseLocation();
+      } catch (locationErr) {
+        console.warn('[VoterWebPortal] coarse location skipped:', locationErr.message);
+      }
+
       const res = await fetch('/api/auth/verify-otp', {
         method: 'POST',
         headers: {
@@ -208,6 +216,7 @@ export default function VoterWebPortal({ initialElectionId = '' }) {
           electionId,
           candidateId: Number(selectedCandidateId),
           biometricToken,
+          location,
         }),
       });
       const data = await res.json();
