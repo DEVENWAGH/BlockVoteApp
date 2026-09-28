@@ -1,0 +1,16 @@
+{
+  "network": "hardhat",
+  "solc": "0.8.22",
+  "voters": 50,
+  "candidates": 3,
+  "deployProxyTx": 251731,
+  "createElection": 238635,
+  "addCandidate": { "n": 3, "min": 179206, "max": 182006, "mean": 181073 },
+  "registerVoter": { "n": 50, "min": 55687, "max": 55699, "mean": 55697 },
+  "transitionToVoting": 38619,
+  "firstVote": { "n": 50, "min": 88903, "max": 106027, "mean": 89946 },
+  "revoteChangedCandidate": { "n": 25, "min": 77462, "max": 77486, "mean": 77478 },
+  "revoteSameCandidate": { "n": 25, "min": 63956, "max": 63980, "mean": 63974 },
+  "transitionToCompleted": 36409,
+  "tallyConserved": true
+}

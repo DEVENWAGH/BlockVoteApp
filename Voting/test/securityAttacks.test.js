@@ -77,13 +77,13 @@ describe("Security Attack Simulations", function () {
     it("A1.2 zero nullifier hash cannot be registered", async function () {
       await expect(
         proxy.connect(relay).registerVoterByRelay(electionId, ethers.ZeroHash)
-      ).to.be.revertedWith("VotingV1: zero hash");
+      ).to.be.revertedWith("VotingV3: zero hash");
     });
 
     it("A1.3 voter cannot call castVoteRelayedV3 directly (no relay)", async function () {
       await expect(
         proxy.connect(attacker).castVoteRelayedV3(electionId, 0, legitimateNullifier, makeSalt())
-      ).to.be.revertedWith("VotingV1: caller is not relay");
+      ).to.be.revertedWith("VotingV3: caller is not relay");
     });
 
     it("A1.4 replay attack: submitting same salt+vote twice is handled by re-vote (not double-count)", async function () {
@@ -100,7 +100,7 @@ describe("Security Attack Simulations", function () {
       const victimNullifier = makeNullifier("org1", "victim@test.com");
       await expect(
         proxy.connect(attacker).registerVoterByRelay(electionId, victimNullifier)
-      ).to.be.revertedWith("VotingV1: caller is not relay");
+      ).to.be.revertedWith("VotingV3: caller is not relay");
     });
 
     it("A1.6 candidateId overflow cannot be used to corrupt voteCount", async function () {
@@ -214,7 +214,7 @@ describe("Security Attack Simulations", function () {
       await proxy.connect(relay).transitionPhase(electionId, 1);
       await expect(
         proxy.connect(relay).addCandidate(electionId, "Fake", "P", "X", "", "")
-      ).to.be.revertedWith("VotingV1: not registration phase");
+      ).to.be.revertedWith("VotingV3: not registration phase");
     });
 
     it("A3.2 cannot reopen completed election for new votes", async function () {
@@ -222,7 +222,7 @@ describe("Security Attack Simulations", function () {
       await proxy.connect(relay).transitionPhase(electionId, 2);
       await expect(
         proxy.connect(relay).transitionPhase(electionId, 1)
-      ).to.be.revertedWith("VotingV1: already completed");
+      ).to.be.revertedWith("VotingV3: already completed");
     });
 
     it("A3.3 single guardian cannot execute upgrade unilaterally", async function () {
@@ -238,13 +238,13 @@ describe("Security Attack Simulations", function () {
 
       await expect(
         proxy.connect(guardian1).executeUpgrade(pid)
-      ).to.be.revertedWith("VotingV1: insufficient approvals");
+      ).to.be.revertedWith("VotingV3: insufficient approvals");
     });
 
     it("A3.4 attacker cannot propose upgrade (non-guardian)", async function () {
       await expect(
         proxy.connect(attacker).proposeUpgrade(ethers.ZeroAddress)
-      ).to.be.revertedWith("VotingV1: caller is not a guardian");
+      ).to.be.revertedWith("VotingV3: caller is not a guardian");
     });
 
     it("A3.5 relay cannot directly modify voteCount (no such function)", async function () {
@@ -268,7 +268,7 @@ describe("Security Attack Simulations", function () {
 
       await expect(
         proxy.connect(guardian2).executeUpgrade(pid)
-      ).to.be.revertedWith("VotingV1: already executed");
+      ).to.be.revertedWith("VotingV3: already executed");
     });
   });
 
@@ -367,7 +367,7 @@ describe("Security Attack Simulations", function () {
       const voter = makeNullifier("org1", "x@test.com");
       await expect(
         proxy.connect(relay).castVoteRelayedV3(fakeId, 0, voter, makeSalt())
-      ).to.be.revertedWith("VotingV1: election does not exist");
+      ).to.be.revertedWith("VotingV3: election does not exist");
     });
 
     it("A5.4 state machine prevents skipping from Registration to Completed via re-entry", async function () {
@@ -466,7 +466,7 @@ describe("Security Attack Simulations", function () {
 
       await expect(
         proxy.connect(guardian3).executeUpgrade(pid)
-      ).to.be.revertedWith("VotingV1: insufficient approvals");
+      ).to.be.revertedWith("VotingV3: insufficient approvals");
     });
   });
 });

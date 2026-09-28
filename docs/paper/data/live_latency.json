@@ -1,0 +1,14 @@
+{
+  "target": "https://www.devz.co.in (Vercel, bom1 edge / iad1 functions)",
+  "client": "Windows 11 desktop in India on residential broadband (requests served via Vercel bom1 edge)",
+  "measured": "2026-09-26",
+  "samples_per_endpoint": 20,
+  "unit": "ms",
+  "endpoints": [
+    { "name": "GET / (landing)", "ok": 20, "min": 244, "p50": 260, "p95": 1724, "max": 1724 },
+    { "name": "GET /api/station", "ok": 20, "min": 223, "p50": 230, "p95": 301, "max": 301 },
+    { "name": "GET /api/relay/status", "ok": 20, "min": 243, "p50": 256, "p95": 346, "max": 346 },
+    { "name": "GET /api/elections/public", "ok": 20, "min": 622, "p50": 657, "p95": 5039, "max": 5039 },
+    { "name": "GET /api/elections/:id", "ok": 20, "min": 780, "p50": 797, "p95": 821, "max": 821 }
+  ]
+}

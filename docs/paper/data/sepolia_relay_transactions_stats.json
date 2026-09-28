@@ -1,0 +1,57 @@
+{
+ "transition_phase": {
+  "n": 5,
+  "gas_min": 38619,
+  "gas_max": 38619,
+  "gas_mean": 38619,
+  "gwei_median": 1.021,
+  "gwei_min": 1.021,
+  "gwei_max": 1.124,
+  "cost_eth_mean": 4.0721478875973e-05
+ },
+ "register_voter": {
+  "n": 83,
+  "gas_min": 55687,
+  "gas_max": 55699,
+  "gas_mean": 55697,
+  "gwei_median": 1.093,
+  "gwei_min": 0.994,
+  "gwei_max": 1.599,
+  "cost_eth_mean": 6.354033673774934e-05
+ },
+ "add_candidate": {
+  "n": 17,
+  "gas_min": 158180,
+  "gas_max": 251640,
+  "gas_mean": 193002,
+  "gwei_median": 1.11,
+  "gwei_min": 1.024,
+  "gwei_max": 1.599,
+  "cost_eth_mean": 0.0002382777527812213
+ },
+ "create_election": {
+  "n": 9,
+  "gas_min": 204189,
+  "gas_max": 238449,
+  "gas_mean": 223253,
+  "gwei_median": 1.066,
+  "gwei_min": 1.019,
+  "gwei_max": 1.684,
+  "cost_eth_mean": 0.0003017170564233897
+ },
+ "_register_interarrival_s": {
+  "n": 78,
+  "median": 1.0975000000000001,
+  "mean": 3.71,
+  "p90": 12.727
+ },
+ "_register_block_gap": {
+  "median": 1.0,
+  "mean": 1.05
+ },
+ "_span": [
+  "2026-08-12T18:41:58.942Z",
+  "2026-08-21T09:52:52.905Z"
+ ],
+ "_total_eth": 0.012243630648704328
+}

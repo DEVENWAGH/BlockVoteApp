@@ -1,4 +1,4 @@
-﻿import hre from "hardhat";
+import hre from "hardhat";
 import { expect } from "chai";
 import { ethers } from "ethers";
 
@@ -87,13 +87,13 @@ describe("VotingV3 â€” Full Contract Test Suite", function () {
         proxy.connect(stranger).createElection(
           "Hacked", "desc", "", now + 10, now + 3600
         )
-      ).to.be.revertedWith("VotingV1: caller is not relay");
+      ).to.be.revertedWith("VotingV3: caller is not relay");
     });
 
     it("1.6 non-guardian cannot propose upgrade", async function () {
       await expect(
         proxy.connect(stranger).proposeUpgrade(ethers.ZeroAddress)
-      ).to.be.revertedWith("VotingV1: caller is not a guardian");
+      ).to.be.revertedWith("VotingV3: caller is not a guardian");
     });
 
     it("1.7 cannot initialize with duplicate guardians", async function () {
@@ -104,7 +104,7 @@ describe("VotingV3 â€” Full Contract Test Suite", function () {
           [relay.address, guardian1.address, guardian1.address, guardian3.address],
           { kind: "uups", initializer: "initialize" }
         )
-      ).to.be.revertedWith("VotingV1: guardians must be unique");
+      ).to.be.revertedWith("VotingV3: guardians must be unique");
     });
   });
 
@@ -145,20 +145,20 @@ describe("VotingV3 â€” Full Contract Test Suite", function () {
     it("2.3 cannot create election with empty title", async function () {
       await expect(
         proxy.connect(relay).createElection("", "desc", "", startTime, endTime)
-      ).to.be.revertedWith("VotingV1: title empty");
+      ).to.be.revertedWith("VotingV3: title empty");
     });
 
     it("2.4 cannot create election with start time in the past", async function () {
       const pastStart = await getBlockTime() - 100;
       await expect(
         proxy.connect(relay).createElection("Old", "desc", "", pastStart, endTime)
-      ).to.be.revertedWith("VotingV1: start in past");
+      ).to.be.revertedWith("VotingV3: start in past");
     });
 
     it("2.5 cannot create election with end before start", async function () {
       await expect(
         proxy.connect(relay).createElection("Bad", "desc", "", startTime, startTime - 1)
-      ).to.be.revertedWith("VotingV1: end before start");
+      ).to.be.revertedWith("VotingV3: end before start");
     });
 
     it("2.6 election IDs are unique across elections", async function () {
@@ -210,13 +210,13 @@ describe("VotingV3 â€” Full Contract Test Suite", function () {
     it("3.3 non-relay cannot add candidate", async function () {
       await expect(
         proxy.connect(stranger).addCandidate(electionId, "X", "P", "S", "", "")
-      ).to.be.revertedWith("VotingV1: caller is not relay");
+      ).to.be.revertedWith("VotingV3: caller is not relay");
     });
 
     it("3.4 cannot add candidate with empty name", async function () {
       await expect(
         proxy.connect(relay).addCandidate(electionId, "", "Party", "S", "", "")
-      ).to.be.revertedWith("VotingV1: name empty");
+      ).to.be.revertedWith("VotingV3: name empty");
     });
 
     it("3.5 cannot add candidate after voting starts", async function () {
@@ -224,7 +224,7 @@ describe("VotingV3 â€” Full Contract Test Suite", function () {
       await proxy.connect(relay).transitionPhase(electionId, 1); // â†’ Voting
       await expect(
         proxy.connect(relay).addCandidate(electionId, "Late", "P", "L", "", "")
-      ).to.be.revertedWith("VotingV1: not registration phase");
+      ).to.be.revertedWith("VotingV3: not registration phase");
     });
 
     it("3.6 getCandidates returns all candidates", async function () {
@@ -269,7 +269,7 @@ describe("VotingV3 â€” Full Contract Test Suite", function () {
       await proxy.connect(relay).transitionPhase(electionId, 1);
       await expect(
         proxy.connect(relay).transitionPhase(electionId, 0)
-      ).to.be.revertedWith("VotingV1: invalid transition");
+      ).to.be.revertedWith("VotingV3: invalid transition");
     });
 
     it("4.4 cannot transition from Completed", async function () {
@@ -277,7 +277,7 @@ describe("VotingV3 â€” Full Contract Test Suite", function () {
       await proxy.connect(relay).transitionPhase(electionId, 2);
       await expect(
         proxy.connect(relay).transitionPhase(electionId, 1)
-      ).to.be.revertedWith("VotingV1: already completed");
+      ).to.be.revertedWith("VotingV3: already completed");
     });
 
     it("4.5 cannot start voting with zero candidates", async function () {
@@ -289,13 +289,13 @@ describe("VotingV3 â€” Full Contract Test Suite", function () {
       const eid2 = r2.logs.find((l) => l.fragment?.name === "ElectionCreated").args[0];
       await expect(
         proxy.connect(relay).transitionPhase(eid2, 1)
-      ).to.be.revertedWith("VotingV1: no candidates");
+      ).to.be.revertedWith("VotingV3: no candidates");
     });
 
     it("4.6 non-relay cannot change phase", async function () {
       await expect(
         proxy.connect(stranger).transitionPhase(electionId, 1)
-      ).to.be.revertedWith("VotingV1: caller is not relay");
+      ).to.be.revertedWith("VotingV3: caller is not relay");
     });
   });
 
@@ -325,7 +325,7 @@ describe("VotingV3 â€” Full Contract Test Suite", function () {
       await proxy.connect(relay).registerVoterByRelay(electionId, voter1Hash);
       await expect(
         proxy.connect(relay).registerVoterByRelay(electionId, voter1Hash)
-      ).to.be.revertedWith("VotingV1: already registered");
+      ).to.be.revertedWith("VotingV3: already registered");
     });
 
     it("5.3 same nullifier can be registered in DIFFERENT elections", async function () {
@@ -346,13 +346,13 @@ describe("VotingV3 â€” Full Contract Test Suite", function () {
     it("5.4 cannot register with zero hash", async function () {
       await expect(
         proxy.connect(relay).registerVoterByRelay(electionId, NULL_HASH)
-      ).to.be.revertedWith("VotingV1: zero hash");
+      ).to.be.revertedWith("VotingV3: zero hash");
     });
 
     it("5.5 non-relay cannot register voter", async function () {
       await expect(
         proxy.connect(stranger).registerVoterByRelay(electionId, voter1Hash)
-      ).to.be.revertedWith("VotingV1: caller is not relay");
+      ).to.be.revertedWith("VotingV3: caller is not relay");
     });
 
     it("5.6 isVoterRegisteredForElection returns correct values", async function () {
@@ -454,7 +454,7 @@ describe("VotingV3 â€” Full Contract Test Suite", function () {
       const salt = makeSalt();
       await expect(
         proxy.connect(stranger).castVoteRelayedV3(electionId, 0, voter1Hash, salt)
-      ).to.be.revertedWith("VotingV1: caller is not relay");
+      ).to.be.revertedWith("VotingV3: caller is not relay");
     });
 
     it("6.10 getVoteStatus returns (true, 0) after first vote", async function () {
@@ -637,7 +637,7 @@ describe("VotingV3 â€” Full Contract Test Suite", function () {
       const eid2 = r2.logs.find((l) => l.fragment?.name === "ElectionCreated").args[0];
       await proxy.connect(relay).addCandidate(eid2, "X", "P", "S", "", "");
       await proxy.connect(relay).transitionPhase(eid2, 1);
-      await expect(proxy.getElectionResults(eid2)).to.be.revertedWith("VotingV1: not completed");
+      await expect(proxy.getElectionResults(eid2)).to.be.revertedWith("VotingV3: not completed");
     });
 
     it("8.5 cannot get winner before election is Completed", async function () {
@@ -647,7 +647,7 @@ describe("VotingV3 â€” Full Contract Test Suite", function () {
       const eid2 = r2.logs.find((l) => l.fragment?.name === "ElectionCreated").args[0];
       await proxy.connect(relay).addCandidate(eid2, "X", "P", "S", "", "");
       await proxy.connect(relay).transitionPhase(eid2, 1);
-      await expect(proxy.getWinner(eid2)).to.be.revertedWith("VotingV1: not completed");
+      await expect(proxy.getWinner(eid2)).to.be.revertedWith("VotingV3: not completed");
     });
   });
 
@@ -753,7 +753,7 @@ describe("VotingV3 â€” Full Contract Test Suite", function () {
       await proxy.connect(guardian1).approveUpgrade(pid);
       await expect(
         proxy.connect(guardian1).approveUpgrade(pid)
-      ).to.be.revertedWith("VotingV1: already approved");
+      ).to.be.revertedWith("VotingV3: already approved");
     });
 
     it("10.5 upgrade requires 2-of-3 approvals before execute", async function () {
@@ -764,7 +764,7 @@ describe("VotingV3 â€” Full Contract Test Suite", function () {
       // Only 1 approval â€” execute should fail
       await expect(
         proxy.connect(guardian1).executeUpgrade(pid)
-      ).to.be.revertedWith("VotingV1: insufficient approvals");
+      ).to.be.revertedWith("VotingV3: insufficient approvals");
     });
 
     it("10.6 upgrade succeeds after 2-of-3 approvals", async function () {
@@ -781,7 +781,7 @@ describe("VotingV3 â€” Full Contract Test Suite", function () {
     it("10.7 non-guardian cannot propose upgrade", async function () {
       await expect(
         proxy.connect(stranger).proposeUpgrade(newImpl)
-      ).to.be.revertedWith("VotingV1: caller is not a guardian");
+      ).to.be.revertedWith("VotingV3: caller is not a guardian");
     });
 
     it("10.8 cannot execute already-executed upgrade", async function () {
@@ -793,7 +793,7 @@ describe("VotingV3 â€” Full Contract Test Suite", function () {
       await proxy.connect(guardian1).executeUpgrade(pid);
       await expect(
         proxy.connect(guardian2).executeUpgrade(pid)
-      ).to.be.revertedWith("VotingV1: already executed");
+      ).to.be.revertedWith("VotingV3: already executed");
     });
 
     it("10.9 data is preserved after upgrade (UUPS storage safety)", async function () {
@@ -828,7 +828,7 @@ describe("VotingV3 â€” Full Contract Test Suite", function () {
   describe("11 Â· Edge Cases & Security Boundaries", function () {
     it("11.1 cannot interact with non-existent election", async function () {
       const fakeId = ethers.keccak256(ethers.toUtf8Bytes("fake-id"));
-      await expect(proxy.getElection(fakeId)).to.be.revertedWith("VotingV1: election does not exist");
+      await expect(proxy.getElection(fakeId)).to.be.revertedWith("VotingV3: election does not exist");
     });
 
     it("11.2 relay wallet cannot be zero address on init", async function () {
@@ -839,7 +839,7 @@ describe("VotingV3 â€” Full Contract Test Suite", function () {
           [ethers.ZeroAddress, guardian1.address, guardian2.address, guardian3.address],
           { kind: "uups", initializer: "initialize" }
         )
-      ).to.be.revertedWith("VotingV1: relay cannot be zero");
+      ).to.be.revertedWith("VotingV3: relay cannot be zero");
     });
 
     it("11.3 multiple elections run independently", async function () {

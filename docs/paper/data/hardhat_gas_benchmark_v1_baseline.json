@@ -1,0 +1,17 @@
+{
+  "contract": "VotingV1",
+  "network": "hardhat",
+  "solc": "0.8.22",
+  "voters": 50,
+  "candidates": 3,
+  "deployProxyTx": 251709,
+  "createElection": 238613,
+  "addCandidate": { "n": 3, "min": 179281, "max": 182081, "mean": 181148 },
+  "registerVoter": { "n": 50, "min": 55742, "max": 55754, "mean": 55752 },
+  "transitionToVoting": 38585,
+  "firstVote": { "n": 50, "min": 65740, "max": 82864, "mean": 66784 },
+  "revoteChangedCandidate": null,
+  "revoteSameCandidate": null,
+  "transitionToCompleted": 36375,
+  "tallyConserved": true
+}
