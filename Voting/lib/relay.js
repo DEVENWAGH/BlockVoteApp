@@ -35,9 +35,9 @@ async function sendRelayTx(sendFn, maxAttempts = 4) {
     let lastErr;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       resetRelayNonce();
+      let tx;
       try {
-        const tx = await sendFn();
-        return await tx.wait();
+        tx = await sendFn();
       } catch (err) {
         lastErr = err;
         if (isNonceError(err) && attempt < maxAttempts - 1) {
@@ -47,6 +47,8 @@ async function sendRelayTx(sendFn, maxAttempts = 4) {
         }
         throw err;
       }
+      // Broadcast succeeded. Never send a second cast if confirmation is slow.
+      return await tx.wait();
     }
     throw lastErr;
   });

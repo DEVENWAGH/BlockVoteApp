@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
 enum class VoteStep {
@@ -239,15 +240,39 @@ class VoteViewModel @Inject constructor(
         }
     }
 
+    private val castGate = AtomicBoolean(false)
+
+    /**
+     * Call before any slow work (location lookup). A second tap while the
+     * first ballot is in flight is ignored.
+     */
+    fun tryStartCast(): Boolean {
+        val s = _state.value
+        if (s.step == VoteStep.SUCCESS || s.loading) return false
+        if (!castGate.compareAndSet(false, true)) return false
+        if (s.otpInput.length != 6) {
+            castGate.set(false)
+            _state.update { it.copy(error = "Enter the 6-digit OTP from your email") }
+            return false
+        }
+        _state.update { it.copy(loading = true, error = null) }
+        return true
+    }
+
     fun castVote(location: CoarseLocation? = null) {
         val s = _state.value
-        val election = s.selectedElection ?: return
-        val candidateId = s.selectedCandidateId?.toIntOrNull() ?: return
-        val token = s.biometricToken.orEmpty()
-        if (s.otpInput.length != 6) {
-            _state.update { it.copy(error = "Enter the 6-digit OTP from your email") }
+        val election = s.selectedElection ?: run {
+            castGate.set(false)
+            _state.update { it.copy(loading = false, error = "Select an election first") }
             return
         }
+        val candidateId = s.selectedCandidateId?.toIntOrNull() ?: run {
+            castGate.set(false)
+            _state.update { it.copy(loading = false, error = "Select a candidate first") }
+            return
+        }
+        val token = s.biometricToken.orEmpty()
+        if (!castGate.get()) return
         viewModelScope.launch {
             _state.update { it.copy(loading = true, error = null) }
             repository.castVote(
@@ -269,6 +294,7 @@ class VoteViewModel @Inject constructor(
                     )
                 }
             }.onFailure { e ->
+                castGate.set(false)
                 _state.update {
                     it.copy(loading = false, error = e.message ?: "Vote failed")
                 }
@@ -289,6 +315,7 @@ class VoteViewModel @Inject constructor(
     }
 
     fun reset() {
+        castGate.set(false)
         _state.value = VoteUiState()
     }
 }

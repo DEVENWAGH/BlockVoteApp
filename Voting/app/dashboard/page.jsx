@@ -9,8 +9,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@fluentui/react-components';
 import {
   Users, LogOut, PlusCircle, Upload, Download, RefreshCw,
-  FileSpreadsheet, CheckCircle, AlertCircle, Loader2, Building2,
-  ChevronRight, BarChart3, ChevronDown, UserPlus, Play, StopCircle,
+  FileSpreadsheet, CheckCircle, AlertCircle, Loader2,
+  BarChart3, ChevronDown, UserPlus, Play, StopCircle,
   Shield, Clock, CheckCircle2, Trophy, ImagePlus, X, Vote
 } from 'lucide-react';
 import ElectionResults from '@/components/ElectionResults';
@@ -971,97 +971,35 @@ export default function DashboardPage() {
   const orgName = session.user.name || session.user.email || 'Admin';
 
   return (
-    <div className="min-h-screen bg-canvas text-ink flex flex-col md:flex-row font-sans">
-      {/* Sidebar - Desktop */}
-      <aside className="hidden md:flex w-64 shrink-0 border-r border-hairline bg-surface-soft flex-col">
-        {/* Logo */}
-        <div className="p-6 border-b border-hairline">
-          <div className="flex items-center gap-2.5">
-            <BrandLogo size={32} />
-            <span className="font-bold text-ink text-base tracking-tight">Block Vote</span>
+    <div className="min-h-screen bg-canvas text-ink flex flex-col font-sans">
+      <nav className="border-b border-hairline bg-canvas/80 backdrop-blur-md px-6 md:px-16 py-4 flex items-center justify-between sticky top-0 z-20 gap-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <BrandLogo size={32} />
+          <div className="min-w-0">
+            <h1 className="font-bold text-ink text-base leading-tight">Block Vote</h1>
+            <p className="text-xs text-muted font-semibold uppercase tracking-wider truncate">{orgName}</p>
           </div>
         </div>
-
-        {/* Admin Info */}
-        <div className="p-4 border-b border-hairline">
-          <div className="flex items-center gap-3 bg-canvas border border-hairline rounded-xl p-3.5 shadow-sm">
-            <div className="w-9 h-9 rounded-full bg-surface-strong flex items-center justify-center shrink-0 text-primary">
-              <Building2 size={16} />
-            </div>
-            <div className="min-w-0">
-              <p className="text-ink font-bold text-sm truncate">{orgName}</p>
-              <p className="text-body text-xs capitalize">Election admin</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Navigation links */}
-        <nav className="flex-1 p-4 space-y-1.5">
-          <div className="flex items-center gap-2.5 w-full px-4 py-3 rounded-full text-sm font-semibold bg-primary/10 text-primary border border-primary/20">
-            <BarChart3 size={15} /> 
-            <span>Elections Portal</span>
-            <ChevronRight size={13} className="text-primary ml-auto" />
-          </div>
-          <p className="text-muted text-xs px-4 pt-2.5 leading-relaxed">
-            Admin console for configuration, voters list uploads, and ballot outcomes.
-          </p>
-        </nav>
-
-        {/* User context / Sign out */}
-        <div className="p-4 border-t border-hairline">
-          <div className="px-4 py-2 mb-2">
-            <p className="text-xs text-muted truncate font-mono">{session.user.email}</p>
-          </div>
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <ThemeToggle />
+          <span className="hidden sm:inline text-xs text-body bg-surface-soft border border-hairline px-3 py-1.5 rounded-full font-medium truncate max-w-[220px]">
+            {session.user.email}
+          </span>
           <button
             id="dashboard-signout-btn"
+            type="button"
             onClick={() => signOut({ callbackUrl: '/' })}
-            className="w-full flex items-center gap-2.5 px-4 py-3 rounded-full text-sm text-semantic-down hover:bg-red-50 dark:hover:bg-red-950/30 transition-all font-semibold cursor-pointer border border-transparent hover:border-red-100 dark:hover:border-red-900"
+            className="flex items-center gap-1.5 text-xs font-semibold text-semantic-down border border-hairline bg-canvas hover:bg-red-50 dark:hover:bg-red-950/30 px-3 py-1.5 rounded-full"
           >
-            <LogOut size={15} /> 
-            <span>Sign out</span>
+            <LogOut size={13} />
+            Sign out
           </button>
         </div>
-      </aside>
+      </nav>
 
-      {/* Mobile Top Bar */}
-      <div className="md:hidden border-b border-hairline bg-canvas px-6 py-4 flex items-center justify-between gap-3 sticky top-0 z-20">
-        <div className="flex items-center gap-2">
-          <BrandLogo size={24} />
-          <span className="font-bold text-ink text-sm">Block Vote</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <ThemeToggle />
-          <button
-            onClick={() => signOut({ callbackUrl: '/' })}
-            className="flex items-center gap-1 text-xs text-semantic-down border border-red-200 bg-red-50/50 dark:bg-red-950/30 dark:border-red-800 px-2.5 py-1.5 rounded-full font-semibold cursor-pointer"
-          >
-            <LogOut size={11} /> Out
-          </button>
-        </div>
-      </div>
-
-      {/* Main Container */}
-      <main className="flex-1 overflow-auto bg-canvas min-h-0">
-        {/* Breadcrumb row */}
-        <div className="border-b border-hairline bg-surface-soft/40 px-6 sm:px-10 py-5 flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-ink font-semibold text-lg">Ballot Manager</h1>
-            <p className="text-body text-xs truncate mt-0.5">{orgName} Administration Dashboard</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <ThemeToggle />
-            <span className="hidden sm:inline text-xs bg-primary/10 border border-primary/20 text-primary px-3 py-1 rounded-full font-semibold">
-              Institutional Admin
-            </span>
-          </div>
-        </div>
-
-        {/* Tab content panel */}
-        <div className="px-6 sm:px-10 py-8 max-w-5xl">
-          <ElectionsTab />
-        </div>
+      <main className="px-6 md:px-16 py-12 max-w-7xl mx-auto w-full">
+        <ElectionsTab />
       </main>
-
     </div>
   );
 }

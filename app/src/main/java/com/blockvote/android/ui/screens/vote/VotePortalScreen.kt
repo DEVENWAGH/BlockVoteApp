@@ -540,12 +540,18 @@ private fun OtpStep(state: VoteUiState, viewModel: VoteViewModel) {
         ErrorText(state.error)
         Spacer(modifier = Modifier.height(20.dp))
         PrimaryGradientButton(
-            text = "Cast Gasless Vote",
+            text = if (state.loading) "Recording vote…" else "Cast Gasless Vote",
+            enabled = !state.loading,
             onClick = {
+                if (!viewModel.tryStartCast()) return@PrimaryGradientButton
                 scope.launch {
-                    val location = if (CoarseLocationHelper.hasPermission(context)) {
-                        CoarseLocationHelper.resolve(context)
-                    } else {
+                    val location = try {
+                        if (CoarseLocationHelper.hasPermission(context)) {
+                            CoarseLocationHelper.resolve(context)
+                        } else {
+                            null
+                        }
+                    } catch (_: Exception) {
                         null
                     }
                     viewModel.castVote(location)

@@ -30,6 +30,8 @@ const VoterSchema = new mongoose.Schema({
   votesCast:        { type: Number, default: 0 },
   /** Set once a polling-station vote is cast — no further votes from any channel. */
   stationVoteFinal: { type: Boolean, default: false },
+  /** Held while a ballot is in flight so a slow retry cannot cast a second one. */
+  castLockUntil: { type: Date, default: null },
 }, { timestamps: true });
 
 VoterSchema.index({ electionId: 1, email: 1 }, { unique: true });

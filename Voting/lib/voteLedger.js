@@ -25,6 +25,33 @@ export async function reserveVoteSlot(voterId, channel) {
   return Voter.findOneAndUpdate(filter, update, { returnDocument: 'before' }).lean();
 }
 
+const CAST_LOCK_MS = 90_000;
+
+/**
+ * One in-flight cast per voter. A second tap during chain lag must not
+ * consume the "change vote" allowance.
+ */
+export async function acquireCastLock(voterId) {
+  const now = new Date();
+  const doc = await Voter.findOneAndUpdate(
+    {
+      _id: voterId,
+      $or: [
+        { castLockUntil: null },
+        { castLockUntil: { $exists: false } },
+        { castLockUntil: { $lte: now } },
+      ],
+    },
+    { $set: { castLockUntil: new Date(now.getTime() + CAST_LOCK_MS) } },
+    { returnDocument: 'after' },
+  ).lean();
+  return Boolean(doc);
+}
+
+export async function releaseCastLock(voterId) {
+  await Voter.updateOne({ _id: voterId }, { $set: { castLockUntil: null } });
+}
+
 /** Undo a reservation after the relay transaction failed. */
 export async function releaseVoteSlot(voterId, before) {
   await Voter.updateOne(

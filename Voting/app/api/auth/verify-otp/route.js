@@ -17,7 +17,7 @@ import { computeNullifierHash } from "@/lib/voterIdentity";
 import { applyCoarseLocationToVoter } from "@/lib/coarseLocation";
 import { getStationSession } from "@/lib/stationSession";
 import { VOTE_CHANNEL, appVotesRemainingAfter } from "@/lib/voteAllowance";
-import { reserveVoteSlot, releaseVoteSlot } from "@/lib/voteLedger";
+import { reserveVoteSlot, releaseVoteSlot, acquireCastLock, releaseCastLock } from "@/lib/voteLedger";
 import { getPublicBaseUrl } from "@/lib/serverEnv";
 
 export async function POST(req) {
@@ -50,7 +50,31 @@ export async function POST(req) {
       electionId: eid,
     });
 
-    if (!record || record.used) {
+    if (!record) {
+      return NextResponse.json(
+        {
+          error:
+            "OTP has expired or has already been used. Please request a new one.",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (record.used && record.resultTxHash) {
+      return NextResponse.json({
+        success: true,
+        alreadyRecorded: true,
+        message: record.resultMessage || "Your vote was already recorded. It was not submitted again.",
+        txHash: record.resultTxHash,
+        verifyUrl: record.resultVerifyUrl || "",
+        channel: record.resultChannel || VOTE_CHANNEL.APP,
+        isRevote: Boolean(record.resultIsRevote),
+        isFinal: record.resultChannel === VOTE_CHANNEL.STATION || record.resultVotesRemaining === 0,
+        votesRemaining: record.resultVotesRemaining,
+      });
+    }
+
+    if (record.used) {
       return NextResponse.json(
         {
           error:
@@ -203,16 +227,79 @@ export async function POST(req) {
       console.warn('[verify-otp] coarse location update skipped:', locationErr.message);
     }
 
-    const before = await reserveVoteSlot(voter._id, channel);
-    if (!before) {
-      const recheck = await preflightCheck(nullifierHash, eid, { channel });
+    const claimed = await EmailOTP.findOneAndUpdate(
+      {
+        _id: record._id,
+        used: { $ne: true },
+        $or: [
+          { claimedAt: null },
+          { claimedAt: { $exists: false } },
+          { claimedAt: { $lte: new Date(Date.now() - 2 * 60 * 1000) } },
+        ],
+      },
+      { $set: { claimedAt: new Date() } },
+      { returnDocument: "after" },
+    );
+    if (!claimed) {
+      const latest = await EmailOTP.findById(record._id).lean();
+      if (latest?.resultTxHash) {
+        return NextResponse.json({
+          success: true,
+          alreadyRecorded: true,
+          message: latest.resultMessage || "Your vote was already recorded. It was not submitted again.",
+          txHash: latest.resultTxHash,
+          verifyUrl: latest.resultVerifyUrl || "",
+          channel: latest.resultChannel || channel,
+          isRevote: Boolean(latest.resultIsRevote),
+          isFinal: latest.resultChannel === VOTE_CHANNEL.STATION || latest.resultVotesRemaining === 0,
+          votesRemaining: latest.resultVotesRemaining,
+        });
+      }
       return NextResponse.json(
         {
-          error: recheck.allowed ? "Another vote is already being processed. Please wait." : recheck.reason,
-          code: recheck.code,
+          error: "Your vote is already being recorded. Wait for the confirmation and do not submit the OTP again.",
         },
         { status: 409 },
       );
+    }
+
+    const locked = await acquireCastLock(voter._id);
+    if (!locked) {
+      await EmailOTP.updateOne(
+        { _id: record._id, used: { $ne: true } },
+        { $set: { claimedAt: null } },
+      );
+      return NextResponse.json(
+        { error: "Your vote is already being recorded. Wait for the confirmation and do not submit the OTP again." },
+        { status: 409 },
+      );
+    }
+
+    let before;
+    try {
+      before = await reserveVoteSlot(voter._id, channel);
+      if (!before) {
+        const recheck = await preflightCheck(nullifierHash, eid, { channel });
+        await releaseCastLock(voter._id);
+        await EmailOTP.updateOne(
+          { _id: record._id, used: { $ne: true } },
+          { $set: { claimedAt: null } },
+        );
+        return NextResponse.json(
+          {
+            error: recheck.allowed ? "Another vote is already being processed. Please wait." : recheck.reason,
+            code: recheck.code,
+          },
+          { status: 409 },
+        );
+      }
+    } catch (reserveErr) {
+      await releaseCastLock(voter._id);
+      await EmailOTP.updateOne(
+        { _id: record._id, used: { $ne: true } },
+        { $set: { claimedAt: null } },
+      );
+      throw reserveErr;
     }
 
     let txHash;
@@ -221,8 +308,15 @@ export async function POST(req) {
       ({ txHash, isRevote } = await relayCastVote(eid, Number(candidateId), nullifierHash, { channel }));
     } catch (relayErr) {
       await releaseVoteSlot(voter._id, before);
+      await releaseCastLock(voter._id);
+      await EmailOTP.updateOne(
+        { _id: record._id, used: { $ne: true } },
+        { $set: { claimedAt: null } },
+      );
       throw relayErr;
     }
+
+    await releaseCastLock(voter._id);
 
     const votesCast = (Number(before.votesCast) || 0) + 1;
     const votesRemaining = appVotesRemainingAfter(votesCast, channel);
@@ -242,9 +336,6 @@ export async function POST(req) {
       console.error("[verify-otp] receipt email failed:", mailErr);
     }
 
-    record.used = true;
-    await record.save();
-
     let message = "Vote successfully relayed and recorded on the blockchain.";
     if (channel === VOTE_CHANNEL.STATION) {
       message = isRevote
@@ -255,6 +346,15 @@ export async function POST(req) {
     } else {
       message = "Vote recorded. You can change it once more from the app if you change your mind.";
     }
+
+    record.used = true;
+    record.resultTxHash = txHash;
+    record.resultVerifyUrl = verifyUrl;
+    record.resultMessage = message;
+    record.resultChannel = channel;
+    record.resultIsRevote = Boolean(isRevote);
+    record.resultVotesRemaining = votesRemaining;
+    await record.save();
 
     return NextResponse.json({
       success: true,

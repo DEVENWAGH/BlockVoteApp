@@ -2,15 +2,13 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button } from '@fluentui/react-components';
 import { useWallet } from '@/context/WalletContext';
 import {
-  Shield, Building2, BatteryCharging, RefreshCw, LogOut,
+  Shield, BatteryCharging, RefreshCw, LogOut,
   AlertCircle, CheckCircle, Loader2, Clock, CheckCircle2,
   UserCheck, Trophy, BarChart3, Fuel, Plus, Play, Trash2, Database
 } from 'lucide-react';
-import ElectionResults from '@/components/ElectionResults';
-import VoterAnalytics from '@/components/VoterAnalytics';
+import ElectionAnalyticsPanel from '@/components/ElectionAnalyticsPanel';
 import ThemeToggle from '@/components/ThemeToggle';
 import { signGuardianAction } from '@/lib/guardianMessage';
 
@@ -41,11 +39,10 @@ function getNetworkBadgeClass(name) {
 }
 
 const TABS = [
-  { id: 'approvals', label: 'Elections approvals', icon: Clock },
+  { id: 'approvals', label: 'Approvals', icon: Clock },
   { id: 'results', label: 'Public records', icon: Trophy },
-  { id: 'orgs', label: 'Organizations register', icon: Building2 },
-  { id: 'gas', label: 'Gas logistics', icon: BatteryCharging },
-  { id: 'gov', label: 'Governance protocol', icon: Shield },
+  { id: 'gas', label: 'Gas', icon: BatteryCharging },
+  { id: 'gov', label: 'Governance', icon: Shield },
 ];
 
 function Toast({ type, msg }) {
@@ -194,21 +191,21 @@ function ApprovalsTab({ account }) {
                       <CheckCircle2 size={13} /> Signed by You
                     </span>
                   ) : (
-                    <Button
-                      appearance="primary"
+                    <button
+                      type="button"
                       onClick={() => handleAction(e.id, 'approve')}
                       disabled={actioning === e.id}
-                      size="small"
+                      className="bg-primary hover:bg-primary-active disabled:opacity-60 text-white text-xs font-semibold px-4 py-2 rounded-full cursor-pointer transition shadow-sm"
                     >
-                      {actioning === e.id ? 'Signing…' : 'Co-sign Release'}
-                    </Button>
+                      {actioning === e.id ? 'Signing…' : 'Approve election'}
+                    </button>
                   )}
                   <button
                     onClick={() => handleAction(e.id, 'reject')}
                     disabled={actioning === e.id}
                     className="border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-950/30 text-semantic-down text-xs font-semibold px-4 py-2 rounded-full cursor-pointer transition"
                   >
-                    Reject Ballot
+                    Reject election
                   </button>
                 </div>
               </div>
@@ -221,18 +218,19 @@ function ApprovalsTab({ account }) {
 }
 
 // ── Results Tab ──────────────────────────────────────────────────────────────
-function ResultsTab({ slug }) {
+function ResultsTab() {
   const [elections, setElections] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedElection, setSelectedElection] = useState(null);
-  const [subTab, setSubTab] = useState('tally'); // 'tally' | 'demographics'
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const r = await fetch('/api/admin/elections?filter=all');
       const d = await r.json();
-      setElections(d.elections || []);
+      const list = d.elections || [];
+      setElections(list);
+      setSelectedElection((current) => current || list[0] || null);
     } catch {}
     setLoading(false);
   }, []);
@@ -243,8 +241,8 @@ function ResultsTab({ slug }) {
     <div className="space-y-6">
       <div className="flex items-center justify-between border-b border-hairline pb-4">
         <div>
-          <h3 className="text-lg font-semibold text-ink">Elections Analytics</h3>
-          <p className="text-xs text-body mt-0.5">Browse real-time tallies, demographics, and geographical voter audits.</p>
+          <h3 className="text-lg font-semibold text-ink">Public records</h3>
+          <p className="text-xs text-body mt-0.5">Same 10-minute analytics as the public page, for every election.</p>
         </div>
         <button onClick={load} className="flex items-center gap-1.5 text-xs text-body hover:text-ink border border-hairline px-3 py-1.5 rounded-full bg-canvas cursor-pointer">
           <RefreshCw size={12} /> Sync
@@ -261,11 +259,11 @@ function ResultsTab({ slug }) {
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-          <div className="lg:col-span-4 space-y-2 max-h-[500px] overflow-y-auto pr-1">
+          <div className="lg:col-span-4 space-y-2 max-h-[70vh] overflow-y-auto pr-1">
             {elections.map((e) => (
               <button
                 key={e._id || e.id}
-                onClick={() => { setSelectedElection(e); setSubTab('tally'); }}
+                onClick={() => setSelectedElection(e)}
                 className={`w-full text-left p-4 rounded-lg border transition ${
                   selectedElection?.id === e.id
                     ? 'border-primary bg-primary/5 shadow-sm'
@@ -281,166 +279,21 @@ function ResultsTab({ slug }) {
                   </span>
                 </div>
                 <p className="text-body text-[11px] mt-1.5 truncate">{e.description}</p>
-                <p className="text-[10px] text-muted font-mono mt-1">ID: {e.id.slice(0, 15)}... · Org: {e.orgSlug}</p>
+                <p className="text-[10px] text-muted font-mono mt-1">ID: {String(e.id).slice(0, 15)}...</p>
               </button>
             ))}
           </div>
 
-          <div className="lg:col-span-8 bg-canvas border border-hairline rounded-xl p-5 shadow-sm">
+          <div className="lg:col-span-8">
             {selectedElection ? (
-              <>
-                {/* Mini Sub-Tabs Selector */}
-                <div className="flex border-b border-hairline pb-2 mb-5 gap-6">
-                  <button
-                    onClick={() => setSubTab('tally')}
-                    className={`pb-2 text-xs font-bold uppercase tracking-wider transition-all border-b-2 cursor-pointer ${
-                      subTab === 'tally'
-                        ? 'border-primary text-primary'
-                        : 'border-transparent text-muted hover:text-ink'
-                    }`}
-                  >
-                    Official Tally
-                  </button>
-                  <button
-                    onClick={() => setSubTab('demographics')}
-                    className={`pb-2 text-xs font-bold uppercase tracking-wider transition-all border-b-2 cursor-pointer ${
-                      subTab === 'demographics'
-                        ? 'border-primary text-primary'
-                        : 'border-transparent text-muted hover:text-ink'
-                    }`}
-                  >
-                    Demographics & Geography
-                  </button>
-                </div>
-
-                {subTab === 'tally' ? (
-                  <ElectionResults slug={selectedElection.orgSlug} electionId={selectedElection.id} electionTitle={selectedElection.title} compact />
-                ) : (
-                  <VoterAnalytics slug={selectedElection.orgSlug} electionId={selectedElection.id} electionTitle={selectedElection.title} />
-                )}
-              </>
+              <ElectionAnalyticsPanel electionId={selectedElection.id} />
             ) : (
-              <div className="h-full flex flex-col justify-center items-center text-center py-16">
-                <BarChart3 size={36} className="text-muted mb-2 animate-pulse" />
-                <p className="text-body text-xs font-semibold">Select an election from the roster list to audit official tallies and geographic maps.</p>
+              <div className="h-full flex flex-col justify-center items-center text-center py-16 border border-dashed border-hairline rounded-xl">
+                <BarChart3 size={36} className="text-muted mb-2" />
+                <p className="text-body text-xs font-semibold">Select an election to open its public analytics.</p>
               </div>
             )}
           </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Orgs Tab ──────────────────────────────────────────────────────────────────
-function OrgsTab() {
-  const [orgs, setOrgs] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [actioning, setActioning] = useState(null);
-  const [msg, setMsg] = useState(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const r = await fetch('/api/admin/orgs');
-      const d = await r.json();
-      setOrgs(d.organizations || []);
-    } catch {}
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-
-  const handleVerify = async (orgId, isVerified) => {
-    setMsg(null);
-    setActioning(orgId);
-    try {
-      const r = await fetch('/api/admin/orgs/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orgId, isVerified }),
-      });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error);
-      setMsg({ type: 'success', text: d.message });
-      load();
-    } catch (e) {
-      setMsg({ type: 'error', text: e.message });
-    }
-    setActioning(null);
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between border-b border-hairline pb-4">
-        <div>
-          <h3 className="text-lg font-semibold text-ink">Organizations Register</h3>
-          <p className="text-xs text-body mt-0.5">Control registration validation for platform organizations.</p>
-        </div>
-        <button onClick={load} className="flex items-center gap-1.5 text-xs text-body hover:text-ink border border-hairline px-3 py-1.5 rounded-full bg-canvas cursor-pointer">
-          <RefreshCw size={12} /> Sync
-        </button>
-      </div>
-
-      {msg && <Toast type={msg.type} msg={msg.text} />}
-
-      {loading ? (
-        <div className="flex justify-center py-10"><Loader2 className="animate-spin text-primary" size={24} /></div>
-      ) : orgs.length === 0 ? (
-        <div className="text-center py-12 border border-dashed border-hairline rounded-xl bg-canvas">
-          <Building2 size={36} className="text-muted mx-auto mb-3" />
-          <p className="text-ink font-semibold">Register is empty</p>
-        </div>
-      ) : (
-        <div className="overflow-x-auto border border-hairline rounded-xl bg-canvas">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-surface-soft border-b border-hairline text-body text-xs">
-                <th className="text-left px-5 py-3 font-semibold">Name / Slug</th>
-                <th className="text-left px-5 py-3 font-semibold">Admin Account</th>
-                <th className="text-left px-5 py-3 font-semibold">Category</th>
-                <th className="text-left px-5 py-3 font-semibold">Verify Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-hairline">
-              {orgs.map((o) => (
-                <tr key={o._id} className="hover:bg-surface-soft/40 transition">
-                  <td className="px-5 py-3">
-                    <p className="text-ink font-semibold text-sm">{o.name}</p>
-                    <p className="text-body font-mono text-[10px] mt-0.5">Slug: {o.slug}</p>
-                  </td>
-                  <td className="px-5 py-3 text-body font-mono text-xs">{o.adminEmail}</td>
-                  <td className="px-5 py-3 text-body text-xs capitalize">{o.type || 'Organization'}</td>
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-2">
-                      <span className={`text-xs px-2.5 py-0.5 rounded-full border font-semibold ${
-                        o.verified ? BADGE_GREEN : BADGE_AMBER
-                      }`}>
-                        {o.verified ? 'Verified' : 'Pending Approval'}
-                      </span>
-                      {o.verified ? (
-                        <button
-                          onClick={() => handleVerify(o._id, false)}
-                          disabled={actioning === o._id}
-                          className="text-[10px] text-semantic-down hover:underline font-semibold cursor-pointer"
-                        >
-                          Revoke
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => handleVerify(o._id, true)}
-                          disabled={actioning === o._id}
-                          className="text-[10px] text-primary hover:underline font-semibold cursor-pointer"
-                        >
-                          Approve
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       )}
     </div>
@@ -937,136 +790,78 @@ export default function AdminDashboardPage() {
     );
   }
 
+  const shortAddress = guardian.address
+    ? `${guardian.address.slice(0, 6)}…${guardian.address.slice(-4)}`
+    : '';
+
   return (
-    <div className="min-h-screen bg-canvas text-ink flex flex-col md:flex-row font-sans">
-      
-      {/* Sidebar - Desktop */}
-      <aside className="hidden md:flex w-64 shrink-0 border-r border-hairline bg-surface-soft flex-col">
-        {/* Logo */}
-        <div className="p-6 border-b border-hairline">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-              <Shield size={16} className="text-white" />
-            </div>
-            <span className="font-bold text-ink text-base tracking-tight">Guardian Portal</span>
+    <div className="min-h-screen bg-canvas text-ink flex flex-col font-sans">
+      <nav className="border-b border-hairline bg-canvas/80 backdrop-blur-md px-6 md:px-16 py-4 flex items-center justify-between sticky top-0 z-20 gap-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0">
+            <Shield size={16} className="text-white" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="font-bold text-ink text-base leading-tight">Guardian</h1>
+            <p className="text-xs text-muted font-semibold uppercase tracking-wider">Block Vote</p>
           </div>
         </div>
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <ThemeToggle />
+          <span className={`hidden sm:inline-flex text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-full border max-w-[220px] truncate ${getNetworkBadgeClass(networkName)}`} title={networkName}>
+            {networkName}
+          </span>
+          <span className="hidden sm:inline-flex items-center gap-2 text-xs text-body bg-surface-soft border border-hairline px-3 py-1.5 rounded-full font-medium">
+            <UserCheck size={14} className="text-primary shrink-0" />
+            <span>Guardian {guardian.id}</span>
+            <span className="font-mono text-muted">{shortAddress}</span>
+          </span>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="flex items-center gap-1.5 text-xs font-semibold text-semantic-down border border-hairline bg-canvas hover:bg-red-50 dark:hover:bg-red-950/30 px-3 py-1.5 rounded-full"
+          >
+            <LogOut size={13} />
+            Sign out
+          </button>
+        </div>
+      </nav>
 
-        {/* Profile Card */}
-        <div className="p-4 border-b border-hairline">
-          <div className="bg-canvas border border-hairline rounded-xl p-3.5 shadow-sm">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0 text-primary">
-                <UserCheck size={16} />
-              </div>
-              <div className="min-w-0">
-                <p className="text-ink font-bold text-sm">Guardian #{guardian.id}</p>
-                <p className="text-body text-[10px] font-mono truncate">{guardian.address}</p>
-              </div>
-            </div>
-          </div>
+      <main className="px-6 md:px-16 py-12 max-w-7xl mx-auto w-full">
+        <div className="mb-8 max-w-2xl">
+          <h2 className="text-3xl font-display font-normal tracking-tight text-ink mb-3">Guardian desk</h2>
+          <p className="text-body text-sm leading-relaxed">
+            Approve elections, open public analytics, and check the gas wallet.
+          </p>
         </div>
 
-        {/* Tab Links */}
-        <nav className="flex-1 p-4 space-y-1.5">
+        <div className="flex flex-wrap gap-2 mb-8">
           {TABS.map((tab) => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
+                type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={`w-full flex items-center gap-2.5 px-4 py-3 rounded-full text-sm font-semibold transition-all cursor-pointer border ${
+                className={`flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-full border transition-all ${
                   active
-                    ? 'bg-primary/10 border-primary/20 text-primary'
-                    : 'bg-transparent border-transparent text-body hover:bg-surface-strong'
+                    ? 'bg-primary/10 text-primary border-primary/20 shadow-sm'
+                    : 'bg-canvas text-body border-hairline hover:border-body'
                 }`}
               >
-                <Icon size={15} />
+                <Icon size={13} />
                 <span>{tab.label}</span>
               </button>
             );
           })}
-        </nav>
-
-        {/* Signout */}
-        <div className="p-4 border-t border-hairline">
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-2.5 px-4 py-3 rounded-full text-sm text-semantic-down hover:bg-red-50 dark:hover:bg-red-950/30 transition-all font-semibold cursor-pointer border border-transparent hover:border-red-100 dark:hover:border-red-900"
-          >
-            <LogOut size={15} />
-            <span>Close Session</span>
-          </button>
-        </div>
-      </aside>
-
-      {/* Mobile Top Bar */}
-      <div className="md:hidden border-b border-hairline bg-canvas px-6 py-4 flex items-center justify-between gap-3 sticky top-0 z-20">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center text-white">
-            <Shield size={12} />
-          </div>
-          <span className="font-bold text-ink text-sm">Guardian Portal</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <ThemeToggle />
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-1 text-xs text-semantic-down border border-red-200 bg-red-50/50 dark:bg-red-950/30 dark:border-red-800 px-2.5 py-1.5 rounded-full font-semibold cursor-pointer"
-          >
-            <LogOut size={11} /> Out
-          </button>
-        </div>
-      </div>
-
-      {/* Mobile Tab Swapper */}
-      <div className="md:hidden flex overflow-x-auto bg-surface-soft border-b border-hairline p-2 gap-1 scrollbar-none sticky top-14 z-10">
-        {TABS.map((tab) => {
-          const active = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`whitespace-nowrap px-4 py-2 rounded-full text-xs font-semibold uppercase tracking-wider transition ${
-                active ? 'bg-primary text-white' : 'text-body hover:bg-surface-strong'
-              }`}
-            >
-              {tab.label.split(' ')[0]}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Main Container */}
-      <main className="flex-1 overflow-auto bg-canvas min-h-0">
-        {/* Breadcrumb Header */}
-        <div className="border-b border-hairline bg-surface-soft/40 px-6 sm:px-10 py-5 flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-ink font-semibold text-lg">Aegis Guardian Console</h1>
-            <p className="text-body text-xs truncate mt-0.5">Multi-Signature Consensus Node Administration</p>
-          </div>
-          <div className="flex items-center gap-3 font-sans shrink-0">
-            <span className={`hidden sm:inline-flex text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-full border max-w-[220px] truncate ${getNetworkBadgeClass(networkName)}`} title={networkName}>
-              📡 {networkName}
-            </span>
-            <ThemeToggle />
-            <span className="hidden sm:inline text-xs bg-primary/10 border border-primary/20 text-primary px-3 py-1 rounded-full font-semibold">
-              Security Clearances
-            </span>
-          </div>
         </div>
 
-        {/* Tab view */}
-        <div className="px-6 sm:px-10 py-8 max-w-5xl">
-          {activeTab === 'approvals' && <ApprovalsTab account={guardian.address} />}
-          {activeTab === 'results' && <ResultsTab />}
-          {activeTab === 'orgs' && <OrgsTab />}
-          {activeTab === 'gas' && <GasTab />}
-          {activeTab === 'gov' && <GovTab />}
-        </div>
+        {activeTab === 'approvals' && <ApprovalsTab account={guardian.address} />}
+        {activeTab === 'results' && <ResultsTab />}
+        {activeTab === 'gas' && <GasTab />}
+        {activeTab === 'gov' && <GovTab />}
       </main>
-
     </div>
   );
 }

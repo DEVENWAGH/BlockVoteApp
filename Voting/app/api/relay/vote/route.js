@@ -26,7 +26,7 @@ import Election from "@/lib/models/Election";
 import { relayCastVote } from "@/lib/relay";
 import { preflightCheck } from "@/lib/preflightCache";
 import { VOTE_CHANNEL } from "@/lib/voteAllowance";
-import { reserveVoteSlot, releaseVoteSlot } from "@/lib/voteLedger";
+import { reserveVoteSlot, releaseVoteSlot, acquireCastLock, releaseCastLock } from "@/lib/voteLedger";
 import { hasInternalKey as hasRelayApiKey } from "@/lib/internalAuth";
 
 export async function POST(req) {
@@ -133,8 +133,17 @@ export async function POST(req) {
       return NextResponse.json({ error: preflight.reason, code: preflight.code }, { status: 403 });
     }
 
+    const locked = await acquireCastLock(voter._id);
+    if (!locked) {
+      return NextResponse.json(
+        { error: "A vote for this voter is already being recorded. Please wait." },
+        { status: 409 },
+      );
+    }
+
     const before = await reserveVoteSlot(voter._id, VOTE_CHANNEL.APP);
     if (!before) {
+      await releaseCastLock(voter._id);
       return NextResponse.json(
         { error: "Vote allowance used up or another vote is in progress." },
         { status: 409 },
@@ -152,8 +161,11 @@ export async function POST(req) {
       }));
     } catch (relayErr) {
       await releaseVoteSlot(voter._id, before);
+      await releaseCastLock(voter._id);
       throw relayErr;
     }
+
+    await releaseCastLock(voter._id);
 
     return NextResponse.json({
       success: true,

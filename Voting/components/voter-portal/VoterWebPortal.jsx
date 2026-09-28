@@ -61,6 +61,7 @@ export default function VoterWebPortal({ station }) {
   const [boothLocation, setBoothLocation] = useState(null);
   const [locationNote, setLocationNote] = useState('Checking this booth’s area…');
   const idleTimer = useRef(null);
+  const submittingVote = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -133,6 +134,7 @@ export default function VoterWebPortal({ station }) {
     setResetIn(SUCCESS_RESET_SECONDS);
     setCaptureKey((k) => k + 1);
     setErr('');
+    submittingVote.current = false;
     openElection();
   }, [openElection]);
 
@@ -248,10 +250,12 @@ export default function VoterWebPortal({ station }) {
 
   const castVote = async (e) => {
     e.preventDefault();
+    if (submittingVote.current) return;
     if (otp.trim().length !== 6) {
       setErr('Enter the 6-digit OTP from your email.');
       return;
     }
+    submittingVote.current = true;
     setLoading(true);
     setErr('');
     let location = boothLocation;
@@ -292,6 +296,7 @@ export default function VoterWebPortal({ station }) {
       setResetIn(SUCCESS_RESET_SECONDS);
       setStep('success');
     } catch (err) {
+      submittingVote.current = false;
       setErr(err.message);
     } finally {
       setLoading(false);

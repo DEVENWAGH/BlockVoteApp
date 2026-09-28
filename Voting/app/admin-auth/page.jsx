@@ -32,7 +32,7 @@ const GUARDIAN_PROFILES = [
     title: 'Guardian No. 3',
     role: 'Compliance Trustee',
     address: process.env.NEXT_PUBLIC_GUARDIAN_3 || '',
-    duty: 'Governs organization registration validation and platform integrity audits.',
+    duty: 'Reviews election approvals and public records.',
     icon: Award,
     color: '#05b169', // Semantic Green
   },
@@ -141,13 +141,13 @@ export default function AdminAuthPage() {
         {/* Header */}
         <div className="text-center space-y-4">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-primary/20 bg-primary/5 text-primary text-xs font-semibold uppercase tracking-wider">
-            <Shield size={12} className="animate-pulse" /> Aegis Security Protocol
+            <Shield size={12} /> Guardian sign-in
           </div>
           <h1 className="text-4xl md:text-5xl font-display font-normal tracking-tight text-ink">
-            Guardian Portal Gate
+            Guardian
           </h1>
           <p className="text-body max-w-lg mx-auto text-sm md:text-base leading-relaxed">
-            Multi-signature administrative portal. Cryptographic authorization is required to access gas reserves, relayer nodes, and upgrade hooks.
+            Connect the guardian wallet that matches one of the three seats below.
           </p>
         </div>
 
