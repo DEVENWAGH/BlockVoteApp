@@ -7,10 +7,16 @@ import android.content.pm.PackageManager
 import android.location.Geocoder
 import android.os.Build
 import androidx.core.content.ContextCompat
+import com.blockvote.android.BuildConfig
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.Locale
 import kotlin.coroutines.resume
 
@@ -42,7 +48,9 @@ object CoarseLocationHelper {
             continuation.invokeOnCancellation { cancellation.cancel() }
         } ?: return null
 
-        if (!Geocoder.isPresent()) return null
+        if (!Geocoder.isPresent()) {
+            return reverseOnServer(location.latitude, location.longitude)
+        }
 
         val addresses = try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -78,7 +86,8 @@ object CoarseLocationHelper {
             emptyList()
         }
 
-        val address = addresses.firstOrNull() ?: return null
+        val address = addresses.firstOrNull()
+            ?: return reverseOnServer(location.latitude, location.longitude)
         val village = listOf(
             address.subLocality,
             address.thoroughfare,
@@ -98,7 +107,9 @@ object CoarseLocationHelper {
             else -> ""
         }
 
-        if (village.isBlank() && city.isBlank() && state.isBlank()) return null
+        if (village.isBlank() && city.isBlank() && state.isBlank()) {
+            return reverseOnServer(location.latitude, location.longitude)
+        }
 
         return CoarseLocation(
             village = village,
@@ -108,4 +119,40 @@ object CoarseLocationHelper {
             localityType = localityType
         )
     }
+
+    private suspend fun reverseOnServer(latitude: Double, longitude: Double): CoarseLocation? =
+        withContext(Dispatchers.IO) {
+            val connection = (URL("${BuildConfig.API_BASE_URL.trimEnd('/')}/api/location/reverse")
+                .openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                doOutput = true
+                setRequestProperty("Content-Type", "application/json")
+                setRequestProperty("Accept", "application/json")
+                connectTimeout = 12000
+                readTimeout = 12000
+            }
+            try {
+                connection.outputStream.use { stream ->
+                    stream.write("""{"lat":$latitude,"lng":$longitude}""".toByteArray())
+                }
+                if (connection.responseCode !in 200..299) return@withContext null
+                val payload = connection.inputStream.bufferedReader().use { it.readText() }
+                val location = JSONObject(payload).optJSONObject("location") ?: return@withContext null
+                val village = location.optString("village")
+                val city = location.optString("city")
+                val state = location.optString("state")
+                if (village.isBlank() && city.isBlank() && state.isBlank()) return@withContext null
+                CoarseLocation(
+                    village = village,
+                    city = city,
+                    state = state,
+                    region = location.optString("region").ifBlank { state },
+                    localityType = location.optString("localityType")
+                )
+            } catch (_: Exception) {
+                null
+            } finally {
+                connection.disconnect()
+            }
+        }
 }

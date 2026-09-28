@@ -7,7 +7,7 @@ const SECURITY_HEADERS = {
   'X-Frame-Options': 'DENY',
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
-  'Permissions-Policy': 'camera=(self), microphone=(), geolocation=(), payment=()',
+  'Permissions-Policy': 'camera=(self), microphone=(), geolocation=(self), payment=()',
   'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload',
   'X-XSS-Protection': '1; mode=block',
 };

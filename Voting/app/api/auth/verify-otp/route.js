@@ -197,12 +197,10 @@ export async function POST(req) {
       );
     }
 
-    if (channel === VOTE_CHANNEL.APP) {
-      try {
-        await applyCoarseLocationToVoter(voter._id, location);
-      } catch (locationErr) {
-        console.warn('[verify-otp] coarse location update skipped:', locationErr.message);
-      }
+    try {
+      await applyCoarseLocationToVoter(voter._id, location);
+    } catch (locationErr) {
+      console.warn('[verify-otp] coarse location update skipped:', locationErr.message);
     }
 
     const before = await reserveVoteSlot(voter._id, channel);

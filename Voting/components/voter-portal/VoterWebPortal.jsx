@@ -16,6 +16,7 @@ import {
 import PartySymbol from '@/components/PartySymbol';
 import WebFaceCapture from '@/components/voter-portal/WebFaceCapture';
 import BrandLogo from '@/components/BrandLogo';
+import { requestCoarseLocation } from '@/lib/clientCoarseLocation';
 
 const STEPS = ['election', 'email', 'capture', 'candidate', 'otp', 'success'];
 const IDLE_RESET_MS = 2 * 60 * 1000;
@@ -57,7 +58,28 @@ export default function VoterWebPortal({ station }) {
   const [resetIn, setResetIn] = useState(SUCCESS_RESET_SECONDS);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [boothLocation, setBoothLocation] = useState(null);
+  const [locationNote, setLocationNote] = useState('Checking this booth’s area…');
   const idleTimer = useRef(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    requestCoarseLocation()
+      .then((location) => {
+        if (cancelled || !location) return;
+        setBoothLocation(location);
+        const place = [location.village, location.city, location.state].filter(Boolean).join(', ');
+        setLocationNote(place ? `Booth area recorded: ${place}` : 'Booth area recorded');
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLocationNote('Location stayed off. Voting still works. Geography analytics skip this booth until the browser allows coarse location.');
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const setErr = (msg) => setError(msg || '');
 
@@ -232,6 +254,19 @@ export default function VoterWebPortal({ station }) {
     }
     setLoading(true);
     setErr('');
+    let location = boothLocation;
+    if (!location) {
+      try {
+        location = await requestCoarseLocation();
+        if (location) {
+          setBoothLocation(location);
+          const place = [location.village, location.city, location.state].filter(Boolean).join(', ');
+          setLocationNote(place ? `Booth area recorded: ${place}` : 'Booth area recorded');
+        }
+      } catch {
+        setLocationNote('Location stayed off. Voting still works. Geography analytics skip this booth until the browser allows coarse location.');
+      }
+    }
     try {
       const res = await fetch('/api/auth/verify-otp', {
         method: 'POST',
@@ -245,6 +280,7 @@ export default function VoterWebPortal({ station }) {
           electionId,
           candidateId: Number(selectedCandidateId),
           biometricToken,
+          location,
         }),
       });
       const data = await res.json();
@@ -314,6 +350,7 @@ export default function VoterWebPortal({ station }) {
             cannot be changed afterwards.
           </p>
         </div>
+        <p className="text-xs text-white/55 mb-6 leading-relaxed">{locationNote}</p>
 
         {step !== 'success' && (
           <div className="flex gap-1.5 mb-8" aria-hidden="true">

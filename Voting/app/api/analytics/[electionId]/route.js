@@ -10,8 +10,44 @@ import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import VoteActivity from '@/lib/models/VoteActivity';
 import Election from '@/lib/models/Election';
+import Candidate from '@/lib/models/Candidate';
 import Voter from '@/lib/models/Voter';
 import BiometricHash from '@/lib/models/BiometricHash';
+
+/** Ballots in the delayed window before any candidate share is published. */
+const SHARE_MIN_VOTES = 50;
+/** Place and hour cells smaller than this are omitted so one voter cannot be picked out. */
+const SMALL_CELL = 5;
+
+function publishBuckets(counts, min = SMALL_CELL) {
+  const published = {};
+  let hiddenGroups = 0;
+  for (const [key, count] of Object.entries(counts || {})) {
+    if (!key || key === 'Unknown') continue;
+    if (count >= min) published[key] = count;
+    else hiddenGroups += 1;
+  }
+  return { buckets: published, hiddenGroups };
+}
+
+function roundPercents(rows) {
+  const total = rows.reduce((sum, row) => sum + row.votes, 0);
+  if (!total) return [];
+  const drafts = rows.map((row) => {
+    const exact = (row.votes / total) * 100;
+    return { ...row, percent: Math.floor(exact), remainder: exact - Math.floor(exact) };
+  });
+  let leftover = 100 - drafts.reduce((sum, row) => sum + row.percent, 0);
+  drafts.sort((a, b) => b.remainder - a.remainder);
+  for (const row of drafts) {
+    if (leftover <= 0) break;
+    row.percent += 1;
+    leftover -= 1;
+  }
+  return drafts
+    .map(({ name, party, percent }) => ({ name, party, percent }))
+    .sort((a, b) => b.percent - a.percent);
+}
 
 function normalizeBucket(value, fallback = 'Unknown') {
   const text = String(value || '').trim();
@@ -32,6 +68,9 @@ export async function GET(request, { params }) {
     await connectDB();
     const { searchParams } = new URL(request.url);
     const publicMode = searchParams.get('public') === '1';
+    const requestedDelay = Number(searchParams.get('delay'));
+    const delayMinutes = requestedDelay === 60 ? 60 : 10;
+    const shareCutoff = new Date(Date.now() - delayMinutes * 60 * 1000);
     const { electionId } = await params;
     const eid = String(electionId);
 
@@ -90,17 +129,47 @@ export async function GET(request, { params }) {
       timestamp: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
     });
 
-    // 4. Peak voting hour
-    const peakHour = hourlyDistribution.length > 0
-      ? hourlyDistribution.reduce((max, h) => h.count > max.count ? h : max, hourlyDistribution[0])
-      : null;
+    // Candidate shares use only ballots older than the delay window, and only
+    // once that window is large enough that one new ballot cannot be traced.
+    const delayedBreakdown = await VoteActivity.aggregate([
+      { $match: { electionId: eid, timestamp: { $lte: shareCutoff } } },
+      { $group: { _id: '$candidateId', votes: { $sum: 1 } } },
+    ]);
+    const delayedTotal = delayedBreakdown.reduce((sum, row) => sum + row.votes, 0);
+    let candidateShares = {
+      visible: false,
+      minimumBallots: SHARE_MIN_VOTES,
+      delayMinutes,
+      through: shareCutoff.toISOString(),
+      shares: [],
+    };
+    if (delayedTotal >= SHARE_MIN_VOTES) {
+      const candidates = await Candidate.find({ electionId: eid })
+        .select('candidateId name party')
+        .lean();
+      const byId = new Map(candidates.map((c) => [Number(c.candidateId), c]));
+      candidateShares = {
+        visible: true,
+        minimumBallots: SHARE_MIN_VOTES,
+        delayMinutes,
+        through: shareCutoff.toISOString(),
+        shares: roundPercents(delayedBreakdown.map((row) => {
+          const candidate = byId.get(Number(row._id));
+          return {
+            name: candidate?.name || 'Candidate',
+            party: candidate?.party || '',
+            votes: row.votes,
+          };
+        })),
+      };
+    }
 
-    // 5. Recent activity feed (last 50 events)
-    const recentActivity = await VoteActivity.find({ electionId: eid })
-      .sort({ timestamp: -1 })
-      .limit(50)
-      .select('candidateId txHash blockNumber timestamp')
-      .lean();
+    const publishedHourly = hourlyDistribution.filter((row) => {
+      const hourStart = new Date(row.hour).getTime();
+      return Number.isFinite(hourStart)
+        && hourStart + 60 * 60 * 1000 <= shareCutoff.getTime()
+        && row.count >= SMALL_CELL;
+    });
 
     // 6. Election metadata
     const election = await Election.findOne({ electionId: eid }).lean();
@@ -203,43 +272,68 @@ export async function GET(request, { params }) {
 
     // Re-vote stats (V3 feature)
     const revoteCount = await VoteActivity.countDocuments({ electionId: eid, isRevote: true });
-    const regionBuckets = countBuckets(registeredVoters, (v) => v.region || v.state);
-    const stateBuckets = countBuckets(registeredVoters, (v) => v.state || v.region);
-    const cityBuckets = countBuckets(registeredVoters, (v) => v.city);
-    const villageBuckets = countBuckets(registeredVoters, (v) => v.village);
-    const localityTypeBuckets = countBuckets(registeredVoters, (v) => v.localityType);
-    const cityTierBuckets = countBuckets(registeredVoters, (v) => v.cityTier);
+    const regionRaw = countBuckets(registeredVoters, (v) => v.region || v.state);
+    const stateRaw = countBuckets(registeredVoters, (v) => v.state || v.region);
+    const cityRaw = countBuckets(registeredVoters, (v) => v.city);
+    const villageRaw = countBuckets(registeredVoters, (v) => v.village);
+    const localityRaw = countBuckets(registeredVoters, (v) => v.localityType);
+    const cityTierRaw = countBuckets(registeredVoters, (v) => v.cityTier);
+    const regionPublished = publishBuckets(regionRaw);
+    const statePublished = publishBuckets(stateRaw);
+    const cityPublished = publishBuckets(cityRaw);
+    const villagePublished = publishBuckets(villageRaw);
+    const localityPublished = publishBuckets(localityRaw);
+    const cityTierPublished = publishBuckets(cityTierRaw);
+    const agePublished = publishBuckets(ageGroups);
+    const genderPublished = publishBuckets(rosterGenders);
+
+    const locationShared = registeredVoters.filter((voter) => (
+      voter.state || voter.city || voter.village || voter.region
+    )).length;
+
+    const publishedPeak = publishedHourly.length > 0
+      ? publishedHourly.reduce((max, row) => (row.count > max.count ? row : max), publishedHourly[0])
+      : null;
+
+    const countsVisible = totalVotes >= SHARE_MIN_VOTES;
+    const electionMeta = election ? {
+      title: election.title,
+      description: election.description,
+      phase: election.phase,
+      startTime: election.startTime,
+      endTime: election.endTime,
+    } : null;
+
+    const publicStats = {
+      totalVotes,
+      countsVisible,
+      votesLast1h,
+      votesLast24h,
+      votesPerMinute: Number(votesPerMinute),
+      peakHour: publishedPeak ? { hour: publishedPeak.hour, votes: publishedPeak.count } : null,
+      registeredVoterCount: registeredVoters.length,
+      locationShared,
+      turnoutRate: registeredVoters.length > 0
+        ? Number(((totalVotes / registeredVoters.length) * 100).toFixed(1))
+        : 0,
+    };
 
     const publicData = {
       electionId: eid,
-      election: election ? {
-        title: election.title,
-        description: election.description,
-        phase: election.phase,
-        startTime: election.startTime,
-        endTime: election.endTime,
-      } : null,
-      stats: {
-        totalVotes,
-        votesLast1h,
-        votesLast24h,
-        votesPerMinute: Number(votesPerMinute),
-        peakHour: peakHour ? { hour: peakHour.hour, votes: peakHour.count } : null,
-        registeredVoterCount: registeredVoters.length,
-        turnoutRate: registeredVoters.length > 0
-          ? Number(((totalVotes / registeredVoters.length) * 100).toFixed(1))
-          : 0,
-      },
-      hourlyDistribution,
+      election: electionMeta,
+      stats: publicStats,
+      hourlyDistribution: publishedHourly,
+      candidateShares,
       demographics: {
-        ageGroups,
-        genderSplit: rosterGenders,
-        localityTypeBuckets,
-        cityTierBuckets,
-        regionBuckets,
-        stateBuckets,
-        cityBuckets,
-        villageBuckets,
+        ageGroups: agePublished.buckets,
+        genderSplit: genderPublished.buckets,
+        localityTypeBuckets: localityPublished.buckets,
+        cityTierBuckets: cityTierPublished.buckets,
+        regionBuckets: regionPublished.buckets,
+        stateBuckets: statePublished.buckets,
+        cityBuckets: cityPublished.buckets,
+        villageBuckets: villagePublished.buckets,
+        hiddenPlaceGroups: regionPublished.hiddenGroups + cityPublished.hiddenGroups + villagePublished.hiddenGroups,
       },
     };
 
@@ -253,36 +347,17 @@ export async function GET(request, { params }) {
     return NextResponse.json({
       success: true,
       data: {
-        electionId: eid,
-        election: election ? {
-          title: election.title,
-          description: election.description,
-          phase: election.phase,
-          startTime: election.startTime,
-          endTime: election.endTime,
-        } : null,
+        ...publicData,
         stats: {
-          totalVotes,
-          votesLast1h,
-          votesLast24h,
-          votesPerMinute: Number(votesPerMinute),
-          peakHour: peakHour ? { hour: peakHour.hour, votes: peakHour.count } : null,
+          ...publicStats,
           candidateCount: candidateBreakdown.length,
           revoteCount,
         },
-        hourlyDistribution,
-        candidateBreakdown,
-        recentActivity: recentActivity.map(v => ({
-          candidateId: v.candidateId,
-          txHash: v.txHash,
-          blockNumber: v.blockNumber,
-          timestamp: v.timestamp,
-          isRevote: v.isRevote || false,
-        })),
         demographics: {
           registeredVoterCount: registeredVoters.length,
-          ageGroups,
-          rosterGenders,
+          ageGroups: agePublished.buckets,
+          genderSplit: genderPublished.buckets,
+          rosterGenders: genderPublished.buckets,
           rekognitionGenders,
           genderMatchStats: {
             matches: genderMatches,
@@ -292,14 +367,14 @@ export async function GET(request, { params }) {
               ? Number(((genderMatches / (genderMatches + genderMismatches)) * 100).toFixed(1))
               : 100
           },
-          localityTypeBuckets,
-          cityTierBuckets,
-          regionBuckets,
-          stateBuckets,
-          cityBuckets,
-          villageBuckets,
-          // PRIVACY: only coarse place labels are stored — never GPS coordinates
-        }
+          localityTypeBuckets: localityPublished.buckets,
+          cityTierBuckets: cityTierPublished.buckets,
+          regionBuckets: regionPublished.buckets,
+          stateBuckets: statePublished.buckets,
+          cityBuckets: cityPublished.buckets,
+          villageBuckets: villagePublished.buckets,
+          hiddenPlaceGroups: regionPublished.hiddenGroups + cityPublished.hiddenGroups + villagePublished.hiddenGroups,
+        },
       },
     });
   } catch (err) {

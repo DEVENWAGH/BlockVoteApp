@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Loader2, AlertCircle, ShieldAlert, ShieldCheck, Map, Users, Award, Percent } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -8,10 +8,6 @@ export default function VoterAnalytics({ slug, electionId, electionTitle }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [leafletLoaded, setLeafletLoaded] = useState(false);
-  const mapRef = useRef(null);
-  const leafletMapInstance = useRef(null);
-
   // 1. Fetch demographics and analytics data
   useEffect(() => {
     if (!electionId) return;
@@ -26,99 +22,6 @@ export default function VoterAnalytics({ slug, electionId, electionTitle }) {
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, [electionId]);
-
-  // 2. Load Leaflet script and CSS dynamically
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    // Check if Leaflet is already loaded
-    if (window.L) {
-      setLeafletLoaded(true);
-      return;
-    }
-
-    const cssLink = document.createElement('link');
-    cssLink.rel = 'stylesheet';
-    cssLink.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-    document.head.appendChild(cssLink);
-
-    const script = document.createElement('script');
-    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-    script.async = true;
-    script.onload = () => {
-      setLeafletLoaded(true);
-    };
-    document.body.appendChild(script);
-
-    return () => {
-      // Clean up scripts & style to prevent double loads
-      try {
-        document.head.removeChild(cssLink);
-        document.body.removeChild(script);
-      } catch (err) {}
-    };
-  }, []);
-
-  // 3. Initialize/update Map
-  useEffect(() => {
-    if (!leafletLoaded || !window.L || !mapRef.current || !data?.demographics?.locations) return;
-
-    // Destroy existing map
-    if (leafletMapInstance.current) {
-      leafletMapInstance.current.remove();
-      leafletMapInstance.current = null;
-    }
-
-    const L = window.L;
-    const locs = data.demographics.locations;
-
-    // Center in India by default or the first marker
-    const center = locs.length > 0 ? [locs[0].latitude, locs[0].longitude] : [20.5937, 78.9629];
-    const map = L.map(mapRef.current, {
-      zoomControl: true,
-      scrollWheelZoom: false,
-    }).setView(center, locs.length > 0 ? 8 : 4);
-
-    leafletMapInstance.current = map;
-
-    // Sleek Dark Matter tile layer
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; OpenStreetMap &copy; CARTO'
-    }).addTo(map);
-
-    const markers = [];
-    locs.forEach((loc) => {
-      if (loc.latitude && loc.longitude) {
-        const dotIcon = L.divIcon({
-          className: 'custom-leaflet-dot-marker',
-          html: `<div class="w-4 h-4 rounded-full bg-indigo-500 border-2 border-white shadow-lg flex items-center justify-center animate-pulse"><div class="w-1.5 h-1.5 rounded-full bg-white"></div></div>`,
-          iconSize: [16, 16],
-          iconAnchor: [8, 8]
-        });
-
-        const timeStr = new Date(loc.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        const dateStr = new Date(loc.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' });
-
-        const m = L.marker([loc.latitude, loc.longitude], { icon: dotIcon })
-          .addTo(map)
-          .bindPopup(`
-            <div style="font-family: sans-serif; color: #1e293b; padding: 2px;">
-              <h5 style="margin: 0 0 4px 0; font-size: 13px; font-weight: 700;">📍 ${loc.city}</h5>
-              <p style="margin: 0; font-size: 10px; color: #64748b;">${loc.country}</p>
-              <div style="margin-top: 6px; font-size: 9px; color: #94a3b8; font-weight: 500;">
-                Cast at: ${dateStr} ${timeStr}
-              </div>
-            </div>
-          `);
-        markers.push(m);
-      }
-    });
-
-    if (markers.length > 0) {
-      const group = new L.featureGroup(markers);
-      map.fitBounds(group.getBounds().pad(0.3));
-    }
-  }, [leafletLoaded, data]);
 
   if (loading) {
     return (
@@ -279,54 +182,37 @@ export default function VoterAnalytics({ slug, electionId, electionTitle }) {
 
       </div>
 
-      {/* 3. Geographical Mapping (Leaflet Map) */}
+      {/* Coarse place labels only — coordinates are never stored */}
       <div className="bg-canvas border border-hairline rounded-xl p-5 shadow-sm space-y-4">
         <h4 className="font-bold text-ink text-sm flex items-center gap-1.5">
           <Map size={15} className="text-primary" />
-          Geographical Footprint (Real-time Voter Geolocation)
+          Coarse place labels
         </h4>
-
-        {/* Map Container */}
-        <div className="relative border border-hairline rounded-lg overflow-hidden h-72 bg-slate-950">
-          <div ref={mapRef} className="w-full h-full z-0" />
-          {!leafletLoaded && (
-            <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center text-white text-xs font-semibold gap-2">
-              <Loader2 className="animate-spin text-primary" size={16} /> Loading Interactive Map...
-            </div>
-          )}
-        </div>
-
-        {/* Locations List */}
-        {demographics.locations.length > 0 ? (
-          <div className="overflow-hidden border border-hairline rounded-lg bg-surface-soft/40">
-            <div className="max-h-36 overflow-y-auto divide-y divide-hairline">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="bg-surface-soft text-body font-semibold uppercase tracking-wider text-[9px] border-b border-hairline">
-                    <th className="px-4 py-2">City</th>
-                    <th className="px-4 py-2">Country</th>
-                    <th className="px-4 py-2">Coordinates</th>
-                    <th className="px-4 py-2 text-right">Time Cast</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-hairline bg-canvas">
-                  {demographics.locations.map((loc, i) => (
-                    <tr key={i} className="hover:bg-surface-soft/30 transition text-body font-medium">
-                      <td className="px-4 py-2 font-bold text-ink">{loc.city}</td>
-                      <td className="px-4 py-2">{loc.country}</td>
-                      <td className="px-4 py-2 font-mono text-[10px] text-muted">{loc.latitude.toFixed(4)}, {loc.longitude.toFixed(4)}</td>
-                      <td className="px-4 py-2 text-right font-mono text-muted">{new Date(loc.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ) : (
-          <p className="text-center py-6 text-muted text-xs border border-dashed border-hairline rounded-lg">No geolocation coordinates recorded yet.</p>
-        )}
+        <p className="text-xs text-body">
+          State, city, and village from the app or a polling station. Groups smaller than 5 voters are hidden. GPS coordinates are not stored.
+        </p>
+        <PlaceBuckets title="States / regions" buckets={demographics.regionBuckets} />
+        <PlaceBuckets title="Cities" buckets={demographics.cityBuckets} />
+        <PlaceBuckets title="Villages / localities" buckets={demographics.villageBuckets} />
       </div>
 
+    </div>
+  );
+}
+
+function PlaceBuckets({ title, buckets }) {
+  const entries = Object.entries(buckets || {}).sort((a, b) => b[1] - a[1]);
+  return (
+    <div className="space-y-2">
+      <p className="text-[11px] uppercase tracking-wider text-muted font-semibold">{title}</p>
+      {entries.length === 0 ? (
+        <p className="text-xs text-body">Nothing to show yet.</p>
+      ) : entries.map(([label, count]) => (
+        <div key={label} className="flex items-center justify-between text-xs border border-hairline rounded-lg px-3 py-2">
+          <span className="text-ink">{label}</span>
+          <span className="font-mono text-body">{count}</span>
+        </div>
+      ))}
     </div>
   );
 }
