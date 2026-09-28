@@ -123,6 +123,7 @@ async function main() {
   const txExecute = await proxyAsG2.executeUpgrade(proposalId);
   await txExecute.wait();
   console.log("🎉 Upgrade transaction confirmed!");
+  console.log(`   Tx Hash                : ${txExecute.hash}`);
 
   // ── Step 7: Verify ────────────────────────────────────────────────────────
   const proxyAfterUpgrade = await hre.ethers.getContractAt("VotingV3", proxyAddress, deployer);
@@ -131,6 +132,7 @@ async function main() {
 
   console.log(`\n📊 Version after upgrade  : ${newVersion}`);
   console.log(`   Implementation address : ${newImplOnChain}`);
+  console.log(`   Upgrade Tx Hash        : ${txExecute.hash}`);
 
   if (newVersion === "3.0.0" && newImplOnChain.toLowerCase() === newImplAddress.toLowerCase()) {
     console.log("\n🏆 SUCCESS: Proxy upgraded to new VotingV3 implementation!");

@@ -191,7 +191,7 @@ contract VotingV3 is Initializable, UUPSUpgradeable {
     }
 
     // ─── Version ──────────────────────────────────────────────────────────────
-    function version() external pure returns (string memory) { return "3.0.0"; }
+    function version() external pure virtual returns (string memory) { return "3.0.0"; }
 
     // ─── UUPS Upgrade Gate (2-of-3 guardians must approve) ───────────────────
     function _authorizeUpgrade(address newImplementation) internal override {

@@ -116,13 +116,18 @@ export async function POST(req) {
       bannerUrl = "",
       startTime,
       endTime,
+      startDate,
+      endDate,
     } = await req.json();
 
     const orgName = admin?.name || "admin";
 
-    if (!title || !description || !startTime || !endTime) {
+    const rawStart = startTime || startDate;
+    const rawEnd = endTime || endDate;
+
+    if (!title || !description || !rawStart || !rawEnd) {
       return NextResponse.json(
-        { error: "title, description, startTime, endTime required" },
+        { error: "title, description, start date, and end date are required" },
         { status: 400 },
       );
     }
@@ -140,20 +145,35 @@ export async function POST(req) {
       );
     }
 
-    let start = Math.floor(new Date(startTime).getTime() / 1000);
-    const end = Math.floor(new Date(endTime).getTime() / 1000);
     const now = Math.floor(Date.now() / 1000);
+    let start, end;
+
+    // If pure date format (YYYY-MM-DD), align start to now + 60s (if today/past) or 7:00 AM IST
+    if (typeof rawStart === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawStart.trim())) {
+      const todayStr = new Date().toISOString().split('T')[0];
+      if (rawStart.trim() <= todayStr) {
+        start = now + 60;
+      } else {
+        start = Math.floor(new Date(`${rawStart.trim()}T07:00:00+05:30`).getTime() / 1000);
+      }
+    } else {
+      start = Math.floor(new Date(rawStart).getTime() / 1000);
+    }
+
+    // If pure date format (YYYY-MM-DD), align end to 18:00 (6:00 PM) IST on that day
+    if (typeof rawEnd === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawEnd.trim())) {
+      end = Math.floor(new Date(`${rawEnd.trim()}T18:00:00+05:30`).getTime() / 1000);
+    } else {
+      end = Math.floor(new Date(rawEnd).getTime() / 1000);
+    }
 
     const GRACE_SECS = 2 * 60;
     if (start + GRACE_SECS <= now) {
-      return NextResponse.json(
-        { error: "Start time must be in the future" },
-        { status: 400 },
-      );
+      start = now + 60;
     }
     if (end <= start) {
       return NextResponse.json(
-        { error: "End time must be after start time" },
+        { error: "End date must be after start date" },
         { status: 400 },
       );
     }

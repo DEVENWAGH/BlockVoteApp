@@ -18,6 +18,8 @@
     "deploy:sepolia": "node scripts/with-prod-env.js run scripts/deployProxy.js --network sepolia",
     "deploy:v2-local": "node scripts/use-env.js development && hardhat run scripts/deployV2Impl.js --network localhost",
     "deploy:v2-sepolia": "node scripts/with-prod-env.js run scripts/deployV2Impl.js --network sepolia",
+    "demo:uups": "hardhat run scripts/test-uups-demo.js --network localhost",
+    "demo:upgrade": "hardhat run scripts/demo-upgrade.js --network localhost",
     "vanish": "node scripts/vanish.js",
     "db:reset": "node scripts/reset-mongodb.js",
     "dev:clean": "yarn env:dev && yarn db:reset && yarn dev",

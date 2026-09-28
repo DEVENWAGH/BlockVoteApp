@@ -622,7 +622,9 @@ function CsvUploadPanel({ electionId }) {
 // ── Elections Tab ─────────────────────────────────────────────────────────────
 function ElectionsTab() {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState({ title: '', description: '', startTime: '', endTime: '' });
+  const getTodayStr = () => new Date().toISOString().split('T')[0];
+  const getDefaultEndStr = () => new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
+  const [form, setForm] = useState({ title: '', description: '', startDate: getTodayStr(), endDate: getDefaultEndStr() });
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -654,7 +656,7 @@ function ElectionsTab() {
     },
     onSuccess: (d) => {
       setMsg({ type: 'success', text: `Election "${form.title}" created successfully.` });
-      setForm({ title: '', description: '', startTime: '', endTime: '' });
+      setForm({ title: '', description: '', startDate: getTodayStr(), endDate: getDefaultEndStr() });
       setShowForm(false);
       queryClient.invalidateQueries({ queryKey: ['elections', 'admin'] });
     },
@@ -666,9 +668,10 @@ function ElectionsTab() {
   const handleCreate = () => {
     setMsg(null);
     createElectionMutation.mutate({
-      ...form,
-      startTime: form.startTime ? new Date(form.startTime).toISOString() : form.startTime,
-      endTime:   form.endTime   ? new Date(form.endTime).toISOString()   : form.endTime,
+      title: form.title,
+      description: form.description,
+      startDate: form.startDate,
+      endDate: form.endDate,
     });
   };
 
@@ -750,8 +753,12 @@ function ElectionsTab() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FieldInput label="Election Title" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="Student Senate Election..." />
               <FieldInput label="Description" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Ballot information..." multiline />
-              <FieldInput label="Start Time" type="datetime-local" value={form.startTime} onChange={e => setForm(f => ({ ...f, startTime: e.target.value }))} />
-              <FieldInput label="End Time" type="datetime-local" value={form.endTime} onChange={e => setForm(f => ({ ...f, endTime: e.target.value }))} />
+              <FieldInput label="Start Date" type="date" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} />
+              <FieldInput label="End Date" type="date" value={form.endDate} onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))} />
+              <div className="col-span-1 md:col-span-2 text-xs text-muted bg-surface-soft border border-hairline rounded-lg p-3 flex items-center gap-2">
+                <Clock size={15} className="text-primary shrink-0" />
+                <span>Fixed daily polling window: <strong>7:00 AM – 6:00 PM IST</strong> (automatically enforced every day between the start and end dates).</span>
+              </div>
             </div>
             <div className="flex gap-3 border-t border-hairline pt-4">
               <button onClick={() => setShowForm(false)} className="px-5 py-2.5 text-sm text-body hover:text-ink border border-hairline rounded-full transition cursor-pointer">Cancel</button>
@@ -823,14 +830,24 @@ function ElectionsTab() {
                         {/* Status controllers */}
                         <div className="flex flex-wrap gap-2">
                           {isRegistration && !e.pendingApproval && !e.guardianApproved && (
-                            <button
-                              onClick={() => handlePhaseAction(e.id, 'request-live')}
-                              disabled={phaseLoading === e.id}
-                              className="flex items-center gap-2 bg-primary hover:bg-primary-active disabled:opacity-50 text-white px-5 py-2 rounded-full font-semibold text-sm transition cursor-pointer shadow-sm"
-                            >
-                              {phaseLoading === e.id ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
-                              Request Guardian Go-Live
-                            </button>
+                            <>
+                              <button
+                                onClick={() => handlePhaseAction(e.id, 'request-live')}
+                                disabled={phaseLoading === e.id}
+                                className="flex items-center gap-2 bg-primary hover:bg-primary-active disabled:opacity-50 text-white px-5 py-2 rounded-full font-semibold text-sm transition cursor-pointer shadow-sm"
+                              >
+                                {phaseLoading === e.id ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+                                Request Guardian Go-Live
+                              </button>
+                              <button
+                                onClick={() => handlePhaseAction(e.id, 'end-election')}
+                                disabled={phaseLoading === e.id}
+                                className="flex items-center gap-1.5 border border-hairline hover:border-red-300 text-muted hover:text-red-600 px-4 py-2 rounded-full font-medium text-xs transition cursor-pointer"
+                                title="Attempt to end election while in registration phase"
+                              >
+                                <StopCircle size={13} /> End Election (Attempt)
+                              </button>
+                            </>
                           )}
                           {isRegistration && e.pendingApproval && (
                             <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300 px-4 py-2 rounded-full text-xs font-semibold">
@@ -860,7 +877,7 @@ function ElectionsTab() {
                         </div>
 
                         {/* Candidate Panel */}
-                        {isRegistration && (
+                        {(isRegistration || isVoting) && (
                           <div className="bg-canvas border border-hairline rounded-xl p-5 shadow-sm">
                             <CandidatePanel slug={slug} electionId={e.id} />
                           </div>

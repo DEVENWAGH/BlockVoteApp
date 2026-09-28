@@ -9,8 +9,10 @@ import { useEffect, useState } from 'react';
  */
 export default function FluentProviderWrapper({ children }) {
   const [theme, setTheme] = useState(webLightTheme);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     const root = document.documentElement;
     const sync = () => {
       setTheme(root.classList.contains('dark') ? webDarkTheme : webLightTheme);
@@ -21,8 +23,12 @@ export default function FluentProviderWrapper({ children }) {
     return () => observer.disconnect();
   }, []);
 
+  if (!mounted) {
+    return <div style={{ minHeight: '100%' }} suppressHydrationWarning>{children}</div>;
+  }
+
   return (
-    <FluentProvider theme={theme} style={{ minHeight: '100%' }}>
+    <FluentProvider theme={theme} style={{ minHeight: '100%' }} suppressHydrationWarning>
       {children}
     </FluentProvider>
   );
