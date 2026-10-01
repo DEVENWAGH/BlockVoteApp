@@ -117,7 +117,7 @@ def fig_layers():
             "VotingV3 UUPS\n(tally + salted\ncommitment)",
             "2-of-3 Guardians\n(upgrades, EIP-191\nsigned actions)"]),
         ("4. Storage &\nAudit", [
-            "MongoDB, IPFS,\nImageKit (records,\nsnapshots, media)",
+            "MongoDB, IPFS,\nAWS S3 (records,\nsnapshots, media)",
             "Public Audit\n(tx-hash receipt,\naudit route)",
             "Election Results\n(on-chain\ncounters)"]),
         ("5. Actors", [
