@@ -9,12 +9,15 @@ import { relayTransitionPhase } from '@/lib/relay';
 import { auth } from '@/auth';
 import { getVoteDeepLink, getVoteInviteUrl } from '@/lib/appLinks';
 import { sendVoteInviteEmail } from '@/lib/mailer';
-import Voter from '@/lib/models/Voter';
+import { sendInvitesForElection } from '@/lib/invites';
+import { electionChecklist } from '@/lib/checklist';
+
+import { getAdminOrGuardian } from '@/lib/adminSession';
 
 export async function POST(req, { params }) {
   try {
-    const session = await auth();
-    if (!session?.user?.adminId) {
+    const authResult = await getAdminOrGuardian(req);
+    if (!authResult?.ok) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -31,7 +34,9 @@ export async function POST(req, { params }) {
     }
     if (
       electionDoc.createdBy &&
-      String(electionDoc.createdBy) !== String(session.user.adminId)
+      String(electionDoc.createdBy) !== String(authResult.adminId) &&
+      authResult.adminId !== 'guardian_master' &&
+      !String(authResult.adminId).startsWith('guardian:')
     ) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -46,8 +51,13 @@ export async function POST(req, { params }) {
       if (electionDoc.guardianApproved) {
         return NextResponse.json({ error: 'Election is already approved and live' }, { status: 400 });
       }
-      if ((electionDoc.candidateCount || 0) < 1) {
-        return NextResponse.json({ error: 'Add at least 1 candidate before requesting go-live' }, { status: 400 });
+      const checklist = await electionChecklist(electionDoc);
+      if (!checklist.ready) {
+        const blockers = checklist.items.filter((i) => !i.ok).map((i) => i.label);
+        return NextResponse.json(
+          { error: `Finish the checklist first: ${blockers.join('; ')}.`, checklist },
+          { status: 400 },
+        );
       }
 
       await Election.findOneAndUpdate(
@@ -57,7 +67,8 @@ export async function POST(req, { params }) {
 
       return NextResponse.json({
         success: true,
-        message: 'Go-live request submitted. A Guardian must approve before the election goes live.',
+        checklist,
+        message: 'Sent to the guardians. Voting opens once a guardian approves.',
       });
     }
 
@@ -80,22 +91,15 @@ export async function POST(req, { params }) {
       const orgName = session?.user?.name || session?.user?.email || 'admin';
       const inviteUrl = getVoteInviteUrl(electionId, { orgName, electionTitle: electionDoc.title });
       const deepLink = getVoteDeepLink(electionId);
-      const voters = await Voter.find({ electionId, status: 'registered' }).limit(500);
-      let sent = 0;
-      for (const voter of voters) {
-        try {
-          await sendVoteInviteEmail(voter.email, {
-            voterName: voter.name,
-            electionTitle: electionDoc.title,
-            inviteUrl,
-            deepLink,
-          });
-          await Voter.findByIdAndUpdate(voter._id, { inviteSentAt: new Date() });
-          sent++;
-        } catch (e) {
-          console.warn('[phase] invite failed', voter.email, e.message);
-        }
-      }
+      const sent = await sendInvitesForElection({
+        electionId,
+        electionTitle: electionDoc.title,
+        inviteUrl,
+        deepLink,
+        onlyUnsent: false,
+        limit: 500,
+        send: sendVoteInviteEmail,
+      });
       return NextResponse.json({
         success: true,
         sent,

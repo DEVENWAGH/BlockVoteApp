@@ -1,41 +1,51 @@
 import mongoose from 'mongoose';
 
-const VoterSchema = new mongoose.Schema({
-  electionId:    { type: String, required: true, index: true },
+/**
+ * Voter — the master electoral roll. One row per person, keyed by voter ID (EPIC).
+ *
+ * Home location lives here, not on the election. An election only *enrolls*
+ * people from this roll (see Enrollment.js), so nobody is typed in twice.
+ *
+ * These fields come from the uploaded roll and must never be overwritten by
+ * vote-time GPS. Coarse vote-time location is stored on the enrollment as
+ * `capturedLocality` for analytics only.
+ */
+const VoterSchema = new mongoose.Schema(
+  {
+    voterId: { type: String, required: true, unique: true, uppercase: true, trim: true },
 
-  name:          { type: String, required: true, trim: true },
-  email:         { type: String, required: true, lowercase: true, trim: true },
-  phone:         { type: String, default: '' },
-  gender:        { type: String, default: '' },
-  age:           { type: Number, default: null },
-  memberId:      { type: String, default: '' },
-  region:        { type: String, default: '', trim: true },
-  state:         { type: String, default: '', trim: true },
-  city:          { type: String, default: '', trim: true },
-  village:       { type: String, default: '', trim: true },
-  localityType:  { type: String, default: '', trim: true },
-  cityTier:      { type: String, default: '', trim: true },
-  locationCapturedAt: { type: Date, default: null },
+    name: { type: String, required: true, trim: true },
+    email: { type: String, required: true, lowercase: true, trim: true, index: true },
+    phone: { type: String, default: '', trim: true, index: true },
+    gender: { type: String, default: '', trim: true },
+    age: { type: Number, default: null },
 
-  nullifierHash: { type: String, default: '' },
-  status:        { type: String, enum: ['pending', 'registered', 'rejected'], default: 'pending' },
-  registeredAt:  { type: Date },
-  onChainTxHash: { type: String, default: '' },
-  rejectionReason: { type: String, default: '' },
+    /** Home place from the roll. */
+    state: { type: String, default: '', trim: true, index: true },
+    district: { type: String, default: '', trim: true, index: true },
+    city: { type: String, default: '', trim: true },
+    village: { type: String, default: '', trim: true },
+    ward: { type: String, default: '', trim: true },
+    partNo: { type: String, default: '', trim: true },
+    homePollingStation: { type: String, default: '', trim: true },
 
-  /** Invite email with app deep link was sent */
-  inviteSentAt:  { type: Date, default: null },
+    /** Home seats — codes from the shared Constituency list. */
+    assemblyConstituency: { type: String, default: '', trim: true, uppercase: true, index: true },
+    parliamentaryConstituency: { type: String, default: '', trim: true, uppercase: true, index: true },
 
-  /** Ballots cast (app allows 2: first vote + one change). */
-  votesCast:        { type: Number, default: 0 },
-  /** Set once a polling-station vote is cast — no further votes from any channel. */
-  stationVoteFinal: { type: Boolean, default: false },
-  /** Held while a ballot is in flight so a slow retry cannot cast a second one. */
-  castLockUntil: { type: Date, default: null },
-}, { timestamps: true });
+    /** Optional analytics labels (never used for eligibility). */
+    localityType: { type: String, default: '', trim: true },
+    cityTier: { type: String, default: '', trim: true },
 
-VoterSchema.index({ electionId: 1, email: 1 }, { unique: true });
-VoterSchema.index({ electionId: 1, status: 1 });
-VoterSchema.index({ electionId: 1, nullifierHash: 1 });
+    source: { type: String, enum: ['csv', 'manual', 'migration'], default: 'csv' },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', default: null },
+    lastImportedAt: { type: Date, default: null },
+  },
+  { timestamps: true },
+);
+
+VoterSchema.index({ state: 1, district: 1, city: 1 });
+VoterSchema.index({ state: 1, district: 1, village: 1 });
+VoterSchema.index({ name: 'text', email: 'text', voterId: 'text' }, { name: 'roll_search' });
 
 export default mongoose.models.Voter || mongoose.model('Voter', VoterSchema);

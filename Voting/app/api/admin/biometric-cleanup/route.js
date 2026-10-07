@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import BiometricHash from '@/lib/models/BiometricHash';
-import Voter from '@/lib/models/Voter';
+import Enrollment from '@/lib/models/Enrollment';
 
 /**
  * DELETE /api/admin/biometric-cleanup
- * Removes BiometricHash records that have no matching Voter (orphan / bad test records).
+ * Removes BiometricHash records that have no matching enrollment (orphan / bad test records).
  * Also removes records where the nullifierHash is empty or a mock value.
  * 
  * Query params:
@@ -29,8 +29,8 @@ export async function DELETE(req) {
     }
 
     // Otherwise, clean up orphan records
-    // 1. Get all valid nullifierHashes from voters
-    const validVoters = await Voter.find({ nullifierHash: { $exists: true, $ne: '' } }, 'nullifierHash');
+    // 1. Get all valid nullifierHashes from enrollments
+    const validVoters = await Enrollment.find({ nullifierHash: { $exists: true, $ne: '' } }, 'nullifierHash');
     const validHashes = validVoters.map(v => v.nullifierHash);
 
     // 2. Find all BiometricHash records NOT in valid voter hashes, or with empty/mock hashes

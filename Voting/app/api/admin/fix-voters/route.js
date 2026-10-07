@@ -1,46 +1,49 @@
 /**
  * POST /api/admin/fix-voters
- * Clears all existing voter registrations so they can be re-registered
- * with the fixed nullifier hash formula (orgSlug:email:secret).
- * 
- * This is a one-time migration endpoint. Only call after deploying the nullifier fix.
- * Body: { confirm: true }
+ * Resets on-chain registration state for enrollments so they can be
+ * re-registered (for example after the nullifier formula changed to
+ * voterId:electionId:secret).
+ *
+ * Body: { confirm: true, electionId? }
  */
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
-import Voter from '@/lib/models/Voter';
+import Enrollment from '@/lib/models/Enrollment';
+import { auth } from '@/auth';
+import { computeNullifierHash } from '@/lib/voterIdentity';
 
 export async function POST(req) {
   try {
-    const { confirm } = await req.json();
+    const session = await auth();
+    if (!session?.user?.adminId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { confirm, electionId } = await req.json();
     if (!confirm) {
       return NextResponse.json({ error: 'Send { confirm: true } to proceed' }, { status: 400 });
     }
 
     await connectDB();
 
-    // Reset all registered voters back to pending so they can be
-    // bulk-registered again with the corrected nullifier hash
-    const result = await Voter.updateMany(
-      { status: 'registered' },
-      {
-        $set: { status: 'pending', nullifierHash: null, onChainTxHash: '', registeredAt: null },
-      }
-    );
+    const scope = electionId ? { electionId: String(electionId) } : {};
+    const cursor = Enrollment.find({ ...scope, status: { $in: ['registered', 'rejected'] } }).cursor();
 
-    // Also reset rejected voters
-    const rejected = await Voter.updateMany(
-      { status: 'rejected' },
-      {
-        $set: { status: 'pending', nullifierHash: null, onChainTxHash: '', rejectionReason: '', registeredAt: null },
-      }
-    );
+    let reset = 0;
+    for await (const enrollment of cursor) {
+      enrollment.status = 'pending';
+      enrollment.nullifierHash = computeNullifierHash(enrollment.voterId, enrollment.electionId);
+      enrollment.onChainTxHash = '';
+      enrollment.registeredAt = null;
+      enrollment.rejectionReason = '';
+      await enrollment.save();
+      reset += 1;
+    }
 
     return NextResponse.json({
       success: true,
-      message: 'All voter registrations reset to pending. Re-run bulk-register for each election.',
-      resetRegistered: result.modifiedCount,
-      resetRejected: rejected.modifiedCount,
+      message: `${reset} enrollment(s) reset to pending. Run "Register waiting voters" for each election.`,
+      reset,
     });
   } catch (err) {
     console.error('[admin/fix-voters]', err);

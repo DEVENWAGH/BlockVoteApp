@@ -6,10 +6,18 @@ import { useWallet } from '@/context/WalletContext';
 import {
   Shield, BatteryCharging, RefreshCw, LogOut,
   AlertCircle, CheckCircle, Loader2, Clock, CheckCircle2,
-  UserCheck, Trophy, BarChart3, Fuel, Plus, Play, Trash2, Database
+  UserCheck, Trophy, BarChart3, Fuel, Plus, Play, Trash2, Database, Users,
+  MapPinned, Flag, Landmark, UserPlus
 } from 'lucide-react';
 import ElectionAnalyticsPanel from '@/components/ElectionAnalyticsPanel';
 import ThemeToggle from '@/components/ThemeToggle';
+import ChecklistCard from '@/components/dashboard/ChecklistCard';
+import VoterCasesTab from '@/components/guardian/VoterCasesTab';
+import VotersVerificationTab from '@/components/guardian/VotersVerificationTab';
+import SeatsPanel from '@/components/dashboard/SeatsPanel';
+import PartiesPanel from '@/components/dashboard/PartiesPanel';
+import GuardianStationsTab from '@/components/guardian/GuardianStationsTab';
+import GuardianCandidatesTab from '@/components/guardian/GuardianCandidatesTab';
 import { signGuardianAction } from '@/lib/guardianMessage';
 
 /** Guardians required to approve an election go-live request (1-of-N). */
@@ -40,6 +48,12 @@ function getNetworkBadgeClass(name) {
 
 const TABS = [
   { id: 'approvals', label: 'Approvals', icon: Clock },
+  { id: 'candidates', label: 'Candidates', icon: UserPlus },
+  { id: 'seats', label: 'Seats & Constituencies', icon: MapPinned },
+  { id: 'voters', label: 'Electoral Roll', icon: Users },
+  { id: 'stations', label: 'Polling Stations', icon: Landmark },
+  { id: 'parties', label: 'Parties & Manifestos', icon: Flag },
+  { id: 'cases', label: 'Voter cases', icon: UserCheck },
   { id: 'results', label: 'Public records', icon: Trophy },
   { id: 'gas', label: 'Gas', icon: BatteryCharging },
   { id: 'gov', label: 'Governance', icon: Shield },
@@ -77,7 +91,47 @@ function ApprovalsTab({ account }) {
     setLoading(false);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  const [pendingCandidates, setPendingCandidates] = useState([]);
+  const [candidatesLoading, setCandidatesLoading] = useState(false);
+  const [actioningCandidate, setActioningCandidate] = useState(null);
+
+  const loadPendingCandidates = useCallback(async () => {
+    setCandidatesLoading(true);
+    try {
+      const r = await fetch('/api/admin/candidates/pending');
+      const d = await r.json();
+      setPendingCandidates(d.candidates || []);
+    } catch (e) {
+      console.warn('Failed to load pending candidates:', e);
+    } finally {
+      setCandidatesLoading(false);
+    }
+  }, []);
+
+  const handleCandidateApproval = async (candidateMongoId, action) => {
+    setActioningCandidate(candidateMongoId);
+    setMsg(null);
+    try {
+      const r = await fetch('/api/admin/candidates/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ candidateMongoId, action }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Failed to update candidate');
+      setMsg({ type: 'success', text: d.message });
+      loadPendingCandidates();
+    } catch (err) {
+      setMsg({ type: 'error', text: err.message });
+    } finally {
+      setActioningCandidate(null);
+    }
+  };
+
+  useEffect(() => {
+    load();
+    loadPendingCandidates();
+  }, [load, loadPendingCandidates]);
 
   const handleAction = async (electionId, action) => {
     setMsg(null);
@@ -124,95 +178,188 @@ function ApprovalsTab({ account }) {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between border-b border-hairline pb-4">
-        <div>
-          <h3 className="text-lg font-semibold text-ink">Pending Approvals</h3>
-          <p className="text-xs text-body mt-0.5">One guardian approval transitions an election from Registration to live voting.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={handleWipeData} title="Wipe all election data" className="flex items-center gap-1.5 text-xs text-red-600 hover:text-red-700 dark:text-red-300 dark:hover:text-red-200 border border-red-200 dark:border-red-800 px-3 py-1.5 rounded-full bg-red-50/50 hover:bg-red-100/50 dark:bg-red-950/30 dark:hover:bg-red-950/50 cursor-pointer">
-            <Trash2 size={12} /> Wipe Data
+    <div className="space-y-8">
+      {/* SECTION 1: CANDIDATE NOMINATIONS FROM STATIONS */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between border-b border-hairline pb-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-lg font-semibold text-ink">Candidate Nominations from Stations</h3>
+              {pendingCandidates.length > 0 && (
+                <span className="bg-amber-500/15 text-amber-600 dark:text-amber-400 text-xs font-bold px-2 py-0.5 rounded-full border border-amber-500/30">
+                  {pendingCandidates.length} Pending
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-body mt-0.5">
+              Review and approve candidates submitted by local polling station officers before they appear on the ballot.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={loadPendingCandidates}
+            className="flex items-center gap-1.5 text-xs text-body hover:text-ink border border-hairline px-3 py-1.5 rounded-full bg-canvas cursor-pointer"
+          >
+            <RefreshCw size={12} className={candidatesLoading ? 'animate-spin text-primary' : ''} />
+            <span>Sync Nominations</span>
           </button>
-          <button onClick={load} className="flex items-center gap-1.5 text-xs text-body hover:text-ink border border-hairline px-3 py-1.5 rounded-full bg-canvas cursor-pointer">
-            <RefreshCw size={12} /> Sync
-          </button>
         </div>
-      </div>
 
-      {msg && <Toast type={msg.type} msg={msg.text} />}
-
-      {loading ? (
-        <div className="flex justify-center py-10"><Loader2 className="animate-spin text-primary" size={24} /></div>
-      ) : elections.length === 0 ? (
-        <div className="text-center py-12 border border-dashed border-hairline rounded-xl bg-canvas">
-          <CheckCircle2 size={36} className="text-primary mx-auto mb-3" />
-          <p className="text-ink font-semibold">Approvals list clear</p>
-          <p className="text-body text-xs mt-1">There are no pending Go-Live requests at this time.</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {elections.map((e) => {
-            const approvedBy = e.approvedBy?.length
-              ? e.approvedBy
-              : (e.guardianApprovedBy ? [e.guardianApprovedBy] : []);
-            const approvalsCount = e.approvalsCount ?? approvedBy.length;
-            const hasApproved = approvedBy.some(addr => addr.toLowerCase() === account.toLowerCase());
-            return (
-              <div key={e._id || e.id} className="bg-canvas border border-hairline rounded-xl p-5 shadow-sm space-y-4">
-                <div className="flex justify-between items-start">
+        {candidatesLoading ? (
+          <div className="flex justify-center py-6"><Loader2 className="animate-spin text-primary" size={20} /></div>
+        ) : pendingCandidates.length === 0 ? (
+          <div className="text-center py-6 border border-dashed border-hairline rounded-xl bg-canvas text-xs text-body">
+            No pending candidate nominations right now. Local stations can nominate candidates anytime.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {pendingCandidates.map((c) => (
+              <div key={c._id} className="bg-canvas border border-hairline rounded-xl p-4 space-y-3 shadow-sm">
+                <div className="flex items-start justify-between gap-2">
                   <div>
-                    <h4 className="font-semibold text-ink text-base">{e.title}</h4>
-                    <p className="text-body text-xs mt-0.5">{e.description}</p>
-                    <p className="text-muted text-[10px] mt-1 uppercase font-semibold">Org Slug: {e.orgSlug} · Ballot ID: {e.id}</p>
+                    <h4 className="font-bold text-ink text-sm">{c.name}</h4>
+                    <p className="text-xs text-primary font-semibold">{c.party} ({c.partyCode})</p>
+                    <p className="text-[11px] text-body mt-0.5">
+                      Seat: <strong className="text-ink">{c.constituencyName || c.constituencyCode}</strong>
+                      {c.stationName && <span> · Booth: {c.stationName}</span>}
+                    </p>
+                    <p className="text-[10px] text-muted">Election: {c.electionTitle}</p>
                   </div>
-                  <span className="text-xs font-mono font-semibold bg-surface-strong px-2.5 py-1 rounded-full text-ink">
-                    Approvals: {approvalsCount} / {ELECTION_GO_LIVE_APPROVAL_THRESHOLD}
-                  </span>
                 </div>
 
-                {approvedBy.length > 0 && (
-                  <div className="bg-surface-soft p-3 rounded-lg border border-hairline">
-                    <p className="text-[10px] font-semibold text-body uppercase tracking-wider mb-1.5">Approved Guardians</p>
-                    <div className="space-y-1 font-mono text-[10px] text-body">
-                      {approvedBy.map((addr, i) => (
-                        <div key={i} className="flex items-center gap-1">
-                          <CheckCircle2 size={10} className="text-primary" />
-                          <span>{addr}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                {c.manifesto && (
+                  <p className="text-xs text-body italic bg-surface-soft p-2 rounded-lg border border-hairline">
+                    &ldquo;{c.manifesto}&rdquo;
+                  </p>
                 )}
 
-                <div className="flex gap-2">
-                  {hasApproved ? (
-                    <span className="text-xs font-semibold text-primary bg-primary/10 border border-primary/20 px-4 py-2 rounded-full flex items-center gap-1.5">
-                      <CheckCircle2 size={13} /> Signed by You
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => handleAction(e.id, 'approve')}
-                      disabled={actioning === e.id}
-                      className="bg-primary hover:bg-primary-active disabled:opacity-60 text-white text-xs font-semibold px-4 py-2 rounded-full cursor-pointer transition shadow-sm"
-                    >
-                      {actioning === e.id ? 'Signing…' : 'Approve election'}
-                    </button>
-                  )}
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-hairline">
                   <button
-                    onClick={() => handleAction(e.id, 'reject')}
-                    disabled={actioning === e.id}
-                    className="border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-950/30 text-semantic-down text-xs font-semibold px-4 py-2 rounded-full cursor-pointer transition"
+                    type="button"
+                    onClick={() => handleCandidateApproval(c._id, 'reject')}
+                    disabled={actioningCandidate === c._id}
+                    className="border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-950/30 text-semantic-down text-xs font-medium px-3.5 py-1.5 rounded-full cursor-pointer transition"
                   >
-                    Reject election
+                    Reject
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleCandidateApproval(c._id, 'approve')}
+                    disabled={actioningCandidate === c._id}
+                    className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-xs font-semibold px-4 py-1.5 rounded-full cursor-pointer transition shadow-sm flex items-center gap-1.5"
+                  >
+                    {actioningCandidate === c._id ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : (
+                      <CheckCircle2 size={12} />
+                    )}
+                    <span>Approve Candidate</span>
                   </button>
                 </div>
               </div>
-            );
-          })}
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* SECTION 2: ELECTIONS WAITING TO OPEN */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between border-b border-hairline pb-4">
+          <div>
+            <h3 className="text-lg font-semibold text-ink">Elections waiting to open</h3>
+            <p className="text-xs text-body mt-0.5">Check the list, then approve. One guardian signature opens voting and emails every enrolled voter.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={handleWipeData} title="Wipe all election data" className="flex items-center gap-1.5 text-xs text-red-600 hover:text-red-700 dark:text-red-300 dark:hover:text-red-200 border border-red-200 dark:border-red-800 px-3 py-1.5 rounded-full bg-red-50/50 hover:bg-red-100/50 dark:bg-red-950/30 dark:hover:bg-red-950/50 cursor-pointer">
+              <Trash2 size={12} /> Wipe Data
+            </button>
+            <button onClick={load} className="flex items-center gap-1.5 text-xs text-body hover:text-ink border border-hairline px-3 py-1.5 rounded-full bg-canvas cursor-pointer">
+              <RefreshCw size={12} /> Sync
+            </button>
+          </div>
         </div>
-      )}
+
+        {msg && <Toast type={msg.type} msg={msg.text} />}
+
+        {loading ? (
+          <div className="flex justify-center py-10"><Loader2 className="animate-spin text-primary" size={24} /></div>
+        ) : elections.length === 0 ? (
+          <div className="text-center py-12 border border-dashed border-hairline rounded-xl bg-canvas">
+            <CheckCircle2 size={36} className="text-primary mx-auto mb-3" />
+            <p className="text-ink font-semibold">Nothing waiting</p>
+            <p className="text-body text-xs mt-1">No election is waiting to be opened right now.</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {elections.map((e) => {
+              const approvedBy = e.approvedBy?.length
+                ? e.approvedBy
+                : (e.guardianApprovedBy ? [e.guardianApprovedBy] : []);
+              const approvalsCount = e.approvalsCount ?? approvedBy.length;
+              const hasApproved = approvedBy.some(addr => addr.toLowerCase() === account.toLowerCase());
+              const ready = e.checklist ? e.checklist.ready : true;
+              return (
+                <div key={e._id || e.id} className="bg-canvas border border-hairline rounded-xl p-5 shadow-sm space-y-4">
+                  <div className="flex justify-between items-start gap-3">
+                    <div className="min-w-0">
+                      <h4 className="font-semibold text-ink text-base">{e.title}</h4>
+                      <p className="text-body text-xs mt-0.5">{e.description}</p>
+                      <p className="text-muted text-[10px] mt-1 uppercase font-semibold">
+                        {e.levelLabel || 'Single ballot'} · Election {e.id} · Requested by {e.org?.name || 'staff'}
+                      </p>
+                    </div>
+                    <span className="text-xs font-mono font-semibold bg-surface-strong px-2.5 py-1 rounded-full text-ink shrink-0">
+                      Signatures: {approvalsCount} / {ELECTION_GO_LIVE_APPROVAL_THRESHOLD}
+                    </span>
+                  </div>
+
+                  {e.checklist && <ChecklistCard checklist={e.checklist} />}
+
+                  {approvedBy.length > 0 && (
+                    <div className="bg-surface-soft p-3 rounded-lg border border-hairline">
+                      <p className="text-[10px] font-semibold text-body uppercase tracking-wider mb-1.5">Approved Guardians</p>
+                      <div className="space-y-1 font-mono text-[10px] text-body">
+                        {approvedBy.map((addr, i) => (
+                          <div key={i} className="flex items-center gap-1">
+                            <CheckCircle2 size={10} className="text-primary" />
+                            <span>{addr}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex gap-2">
+                    {hasApproved ? (
+                      <span className="text-xs font-semibold text-primary bg-primary/10 border border-primary/20 px-4 py-2 rounded-full flex items-center gap-1.5">
+                        <CheckCircle2 size={13} /> Signed by You
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleAction(e.id, 'approve')}
+                        disabled={actioning === e.id || !ready}
+                        title={ready ? 'Sign with your wallet to open voting' : 'Finish the checklist first'}
+                        className="bg-primary hover:bg-primary-active disabled:opacity-60 text-white text-xs font-semibold px-4 py-2 rounded-full cursor-pointer transition shadow-sm"
+                      >
+                        {actioning === e.id ? 'Signing…' : 'Approve and open voting'}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleAction(e.id, 'reject')}
+                      disabled={actioning === e.id}
+                      className="border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-950/30 text-semantic-down text-xs font-semibold px-4 py-2 rounded-full cursor-pointer transition"
+                    >
+                      Send back to staff
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -275,7 +422,7 @@ function ResultsTab() {
                   <span className={`text-[8px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full shrink-0 border ${
                     PHASE_BADGES[e.phase] ?? BADGE_AMBER
                   }`}>
-                    {e.phase === 1 ? 'Live' : e.phase === 2 ? 'Ended' : 'Setup'}
+                    {e.phase === 1 ? 'Voting open' : e.phase === 2 ? 'Closed' : 'Not open'}
                   </span>
                 </div>
                 <p className="text-body text-[11px] mt-1.5 truncate">{e.description}</p>
@@ -831,7 +978,7 @@ export default function AdminDashboardPage() {
         <div className="mb-8 max-w-2xl">
           <h2 className="text-3xl font-display font-normal tracking-tight text-ink mb-3">Guardian desk</h2>
           <p className="text-body text-sm leading-relaxed">
-            Approve elections, open public analytics, and check the gas wallet.
+            Open elections once their checklist is complete, decide voter cases from the roll, see public results, and check the gas wallet.
           </p>
         </div>
 
@@ -858,6 +1005,12 @@ export default function AdminDashboardPage() {
         </div>
 
         {activeTab === 'approvals' && <ApprovalsTab account={guardian.address} />}
+        {activeTab === 'candidates' && <GuardianCandidatesTab />}
+        {activeTab === 'seats' && <SeatsPanel />}
+        {activeTab === 'voters' && <VotersVerificationTab onSwitchToCases={() => setActiveTab('cases')} />}
+        {activeTab === 'stations' && <GuardianStationsTab />}
+        {activeTab === 'parties' && <PartiesPanel />}
+        {activeTab === 'cases' && <VoterCasesTab onSwitchToVoters={() => setActiveTab('voters')} />}
         {activeTab === 'results' && <ResultsTab />}
         {activeTab === 'gas' && <GasTab />}
         {activeTab === 'gov' && <GovTab />}

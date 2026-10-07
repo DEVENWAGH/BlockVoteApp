@@ -14,6 +14,7 @@ import { ethers } from "ethers";
 import { auth } from "@/auth";
 import { getVoteDeepLink, getVoteInviteUrl } from "@/lib/appLinks";
 import { getRpcUrl } from '@/lib/serverEnv';
+import { ELECTION_LEVELS } from "@/lib/models/Election";
 
 async function getReadContract() {
   const abi = (
@@ -29,21 +30,23 @@ async function getReadContract() {
   );
 }
 
-async function requireAdmin() {
-  const session = await auth();
-  if (!session?.user?.adminId) return null;
-  return session.user;
+import { getAdminOrGuardian } from "@/lib/adminSession";
+
+async function requireAdmin(req) {
+  const result = await getAdminOrGuardian(req);
+  if (!result?.ok) return null;
+  return { adminId: result.adminId, name: result.name || "Guardian Authority", isGuardian: result.isGuardian };
 }
 
-export async function GET() {
+export async function GET(req) {
   try {
-    const admin = await requireAdmin();
+    const admin = await requireAdmin(req);
     if (!admin) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     await connectDB();
-    const orgName = admin?.name || "admin";
+    const orgName = admin?.name || "Guardian Authority";
 
     let onChainElections = [];
     try {
@@ -69,7 +72,9 @@ export async function GET() {
       }
     }
 
-    const dbElections = await Election.find({ createdBy: admin.adminId }).lean();
+    const dbElections = (admin.adminId === 'guardian_master' || String(admin.adminId).startsWith('guardian:'))
+      ? await Election.find({}).lean()
+      : await Election.find({ createdBy: admin.adminId }).lean();
     const dbMap = {};
     for (const e of dbElections) {
       dbMap[e.electionId] = e;
@@ -83,6 +88,8 @@ export async function GET() {
         return {
           ...e,
           _id: db._id,
+          level: db.level || "general",
+          candidateCount: db.candidateCount || 0,
           guardianApproved: db.guardianApproved || false,
           pendingApproval: db.pendingApproval || false,
           guardianApprovedBy: db.guardianApprovedBy || "",
@@ -105,7 +112,7 @@ export async function GET() {
 
 export async function POST(req) {
   try {
-    const admin = await requireAdmin();
+    const admin = await requireAdmin(req);
     if (!admin) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -118,19 +125,22 @@ export async function POST(req) {
       endTime,
       startDate,
       endDate,
+      level: rawLevel = "general",
     } = await req.json();
 
+    const level = ELECTION_LEVELS.includes(rawLevel) ? rawLevel : "general";
     const orgName = admin?.name || "admin";
 
     const rawStart = startTime || startDate;
     const rawEnd = endTime || endDate;
 
-    if (!title || !description || !rawStart || !rawEnd) {
+    if (!title?.trim()) {
       return NextResponse.json(
-        { error: "title, description, start date, and end date are required" },
+        { error: "Title is required for the election" },
         { status: 400 },
       );
     }
+    const finalDesc = description?.trim() || `${title.trim()} (${level})`;
 
     await connectDB();
 
@@ -148,8 +158,9 @@ export async function POST(req) {
     const now = Math.floor(Date.now() / 1000);
     let start, end;
 
-    // If pure date format (YYYY-MM-DD), align start to now + 60s (if today/past) or 7:00 AM IST
-    if (typeof rawStart === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawStart.trim())) {
+    if (!rawStart) {
+      start = now + 60;
+    } else if (typeof rawStart === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawStart.trim())) {
       const todayStr = new Date().toISOString().split('T')[0];
       if (rawStart.trim() <= todayStr) {
         start = now + 60;
@@ -157,14 +168,15 @@ export async function POST(req) {
         start = Math.floor(new Date(`${rawStart.trim()}T07:00:00+05:30`).getTime() / 1000);
       }
     } else {
-      start = Math.floor(new Date(rawStart).getTime() / 1000);
+      start = Math.floor(new Date(rawStart).getTime() / 1000) || (now + 60);
     }
 
-    // If pure date format (YYYY-MM-DD), align end to 18:00 (6:00 PM) IST on that day
-    if (typeof rawEnd === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawEnd.trim())) {
+    if (!rawEnd) {
+      end = now + 365 * 24 * 60 * 60;
+    } else if (typeof rawEnd === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawEnd.trim())) {
       end = Math.floor(new Date(`${rawEnd.trim()}T18:00:00+05:30`).getTime() / 1000);
     } else {
-      end = Math.floor(new Date(rawEnd).getTime() / 1000);
+      end = Math.floor(new Date(rawEnd).getTime() / 1000) || (now + 365 * 24 * 60 * 60);
     }
 
     const GRACE_SECS = 2 * 60;
@@ -172,10 +184,7 @@ export async function POST(req) {
       start = now + 60;
     }
     if (end <= start) {
-      return NextResponse.json(
-        { error: "End date must be after start date" },
-        { status: 400 },
-      );
+      end = start + 365 * 24 * 60 * 60;
     }
     if (start <= now) start = now + 30;
 
@@ -184,9 +193,10 @@ export async function POST(req) {
       ipfsCid = await pinJSON(
         {
           type: "election-metadata",
-          version: "1.0",
+          version: "1.1",
           title,
-          description,
+          description: finalDesc,
+          level,
           bannerUrl,
           startTime: new Date(start * 1000).toISOString(),
           endTime: new Date(end * 1000).toISOString(),
@@ -200,7 +210,7 @@ export async function POST(req) {
     }
 
     const { txHash, blockNumber, electionId: newElectionId } =
-      await relayCreateElection(title, description, bannerUrl, start, end, "");
+      await relayCreateElection(title, finalDesc, bannerUrl, start, end, "");
 
     if (!newElectionId) {
       return NextResponse.json(
@@ -212,20 +222,25 @@ export async function POST(req) {
       );
     }
 
+    const isG = admin.isGuardian || admin.adminId === 'guardian_master' || String(admin.adminId).startsWith('guardian:');
+
     await Election.findOneAndUpdate(
       { electionId: newElectionId },
       {
         electionId: newElectionId,
         createdBy: admin.adminId,
         title,
-        description,
+        description: finalDesc,
+        level,
         startTime: new Date(start * 1000),
         endTime: new Date(end * 1000),
-        phase: 0,
+        phase: isG ? 1 : 0,
         txHash,
         blockNumber,
         ipfsCid,
-        guardianApproved: false,
+        guardianApproved: isG,
+        guardianApprovedBy: isG ? String(admin.adminId) : '',
+        guardianApprovedAt: isG ? new Date() : null,
         pendingApproval: false,
       },
       { upsert: true, returnDocument: "after" },
@@ -236,6 +251,7 @@ export async function POST(req) {
         success: true,
         txHash,
         electionId: newElectionId,
+        level,
         ipfsCid,
         ipfsUrl: getIPFSUrl(ipfsCid),
         inviteUrl: getVoteInviteUrl(newElectionId, { orgName, electionTitle: title }),

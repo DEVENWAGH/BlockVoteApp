@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import BiometricHash from '@/lib/models/BiometricHash';
-import Voter from '@/lib/models/Voter';
+import Enrollment from '@/lib/models/Enrollment';
 
 export async function POST(req) {
   try {
-    const { email, electionId, nullifierHash, notes } = await req.json();
+    const { electionId, nullifierHash, notes } = await req.json();
 
     if (!nullifierHash) {
       return NextResponse.json({ error: 'nullifierHash is required.' }, { status: 400 });
@@ -13,15 +13,17 @@ export async function POST(req) {
 
     await connectDB();
 
-    // 1. Verify the voter exists
-    const voter = await Voter.findOne({ nullifierHash });
-    if (!voter) {
+    // 1. Verify the enrollment exists (nullifiers are per election)
+    const filter = { nullifierHash };
+    if (electionId) filter.electionId = String(electionId);
+    const enrollment = await Enrollment.findOne(filter).lean();
+    if (!enrollment) {
       return NextResponse.json({ error: 'Voter not found.' }, { status: 404 });
     }
 
-    const resolvedElectionId = electionId || voter.electionId || '';
+    const resolvedElectionId = electionId || enrollment.electionId || '';
 
-    // 3. Fetch or create the biometric record and set twin status to pending
+    // 2. Fetch or create the biometric record and set twin status to pending
     let record = await BiometricHash.findOne({ nullifierHash });
 
     if (!record) {

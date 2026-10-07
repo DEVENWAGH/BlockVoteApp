@@ -47,7 +47,7 @@ import com.blockvote.android.ui.theme.EmeraldGreen
 @Composable
 fun TwinRequestScreen(
     initialElectionId: String? = null,
-    initialEmail: String? = null,
+    initialVoterId: String? = null,
     onBack: () -> Unit,
     viewModel: TwinRequestViewModel = hiltViewModel()
 ) {
@@ -55,12 +55,12 @@ fun TwinRequestScreen(
 
     BackHandler { onBack() }
 
-    androidx.compose.runtime.LaunchedEffect(initialElectionId, initialEmail) {
+    androidx.compose.runtime.LaunchedEffect(initialElectionId, initialVoterId) {
         if (!initialElectionId.isNullOrBlank()) {
             viewModel.onElectionIdChange(initialElectionId)
         }
-        if (!initialEmail.isNullOrBlank()) {
-            viewModel.onEmailChange(initialEmail)
+        if (!initialVoterId.isNullOrBlank()) {
+            viewModel.onVoterIdChange(initialVoterId)
         }
     }
 
@@ -94,13 +94,13 @@ fun TwinRequestScreen(
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Twin verification",
+                        text = "Look-alike check",
                         style = MaterialTheme.typography.titleLarge,
                         color = Color.White,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Admin review for similar faces",
+                        text = "Ask staff to approve you when the camera confuses two faces",
                         style = MaterialTheme.typography.bodySmall,
                         color = Color.White.copy(alpha = 0.6f)
                     )
@@ -116,14 +116,14 @@ fun TwinRequestScreen(
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 Text(
-                    text = "If face scan flagged you as a duplicate (e.g. identical twin), submit a request. Your election admin reviews it in the web dashboard and can approve you to continue.",
+                    text = "If the face check said your face matches someone else (for example a twin), send this request. Election staff review it and can approve you to continue.",
                     color = Color.White.copy(alpha = 0.75f),
                     style = MaterialTheme.typography.bodyMedium
                 )
 
-                StepHint(number = "1", text = "Enter election ID + registered email")
-                StepHint(number = "2", text = "Admin sees the request under Twin Overrides")
-                StepHint(number = "3", text = "After approval, retry face registration / vote")
+                StepHint(number = "1", text = "Enter the election ID and your voter ID")
+                StepHint(number = "2", text = "Staff see the request on their dashboard")
+                StepHint(number = "3", text = "Once approved, try the face check again")
 
                 if (state.submitted) {
                     SuccessPanel(state, viewModel)
@@ -137,11 +137,11 @@ fun TwinRequestScreen(
                         colors = fieldColors
                     )
                     OutlinedTextField(
-                        value = state.emailInput,
-                        onValueChange = viewModel::onEmailChange,
-                        label = { Text("Registered email") },
+                        value = state.voterIdInput,
+                        onValueChange = viewModel::onVoterIdChange,
+                        label = { Text("Voter ID (on your voter card)") },
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
                         modifier = Modifier.fillMaxWidth(),
                         colors = fieldColors
                     )

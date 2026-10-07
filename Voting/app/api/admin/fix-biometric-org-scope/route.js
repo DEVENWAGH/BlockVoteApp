@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import BiometricHash from '@/lib/models/BiometricHash';
-import Voter from '@/lib/models/Voter';
+import Enrollment from '@/lib/models/Enrollment';
 
 /**
  * POST /api/admin/fix-biometric-org-scope
@@ -31,16 +31,16 @@ export async function POST(req) {
     let notFound = 0;
 
     for (const record of records) {
-      const voter = await Voter.findOne({ nullifierHash: record.nullifierHash })
-        .select('orgSlug electionId')
+      const voter = await Enrollment.findOne({ nullifierHash: record.nullifierHash })
+        .select('electionId')
         .lean();
 
-      if (voter && (voter.orgSlug || voter.electionId)) {
+      if (voter && voter.electionId) {
         await BiometricHash.updateOne(
           { nullifierHash: record.nullifierHash },
           {
             $set: {
-              orgSlug: voter.orgSlug || '',
+              orgSlug: '',
               electionId: voter.electionId || '',
             },
           }

@@ -235,13 +235,44 @@ export async function relayCreateElection(title, description, bannerUrl, startTi
   return { txHash: receipt.hash, blockNumber: receipt.blockNumber, electionId };
 }
 
-/** Add a candidate via relay */
+/**
+ * Add a candidate via relay. Returns the on-chain `candidateId` parsed from
+ * the CandidateAdded event so the Mongo Candidate row can mirror it exactly.
+ */
 export async function relayAddCandidate(electionId, name, party, symbol, manifesto, photoUrl, orgSlug) {
   const receipt = await sendRelayTx(() =>
     getContract().addCandidate(electionId, name, party, symbol, manifesto, photoUrl),
   );
   await logRelayTransaction(receipt, 'add_candidate', { electionId, orgSlug });
-  return { txHash: receipt.hash, blockNumber: receipt.blockNumber };
+
+  let candidateId = null;
+  try {
+    const iface = new ethers.Interface(votingArtifact.abi);
+    for (const log of receipt.logs) {
+      try {
+        const parsed = iface.parseLog({ topics: log.topics, data: log.data });
+        if (parsed && parsed.name === 'CandidateAdded') {
+          candidateId = Number(parsed.args[1]);
+          break;
+        }
+      } catch {
+        // Not our event, skip
+      }
+    }
+  } catch (parseErr) {
+    console.warn('[relay] Could not parse CandidateAdded event:', parseErr.message);
+  }
+
+  if (candidateId === null) {
+    try {
+      const count = await getReadContract().electionCandidateCount(electionId);
+      candidateId = Number(count) - 1;
+    } catch {
+      // leave null — caller falls back to a Mongo count
+    }
+  }
+
+  return { txHash: receipt.hash, blockNumber: receipt.blockNumber, candidateId };
 }
 
 /** Transition election phase via relay */

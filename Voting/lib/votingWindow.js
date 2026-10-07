@@ -100,7 +100,7 @@ export function getVotingWindowStatus(
     };
   }
 
-  if (end && !Number.isNaN(end.getTime()) && now >= end) {
+  if (end && !Number.isNaN(end.getTime()) && now >= end && election?.phase !== 1) {
     return {
       ...base,
       open: false,

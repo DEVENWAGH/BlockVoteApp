@@ -31,7 +31,7 @@ sealed interface Route : NavKey {
     @Serializable
     data class TwinRequest(
         val electionId: String = "",
-        val email: String = ""
+        val voterId: String = ""
     ) : Route
 }
 
@@ -94,8 +94,8 @@ fun BlockVoteNavGraph(deepLinkElectionId: String? = null) {
                         onNavigateToElectionDetail = { electionId ->
                             backStack.add(Route.ElectionDetail(electionId))
                         },
-                        onNavigateToTwinRequest = { electionId, email ->
-                            backStack.add(Route.TwinRequest(electionId, email))
+                        onNavigateToTwinRequest = { electionId, voterId ->
+                            backStack.add(Route.TwinRequest(electionId, voterId))
                         }
                     )
                 }
@@ -121,7 +121,7 @@ fun BlockVoteNavGraph(deepLinkElectionId: String? = null) {
                 is Route.TwinRequest -> NavEntry(key) {
                     TwinRequestScreen(
                         initialElectionId = key.electionId.ifBlank { null },
-                        initialEmail = key.email.ifBlank { null },
+                        initialVoterId = key.voterId.ifBlank { null },
                         onBack = { popOrHome() }
                     )
                 }

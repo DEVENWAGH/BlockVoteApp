@@ -3,6 +3,7 @@ package com.blockvote.android.data.remote
 import com.blockvote.android.data.remote.dto.ApiErrorBody
 import com.blockvote.android.data.remote.dto.AnalyticsResponse
 import com.blockvote.android.data.remote.dto.AuditVerifyResponse
+import com.blockvote.android.data.remote.dto.BallotResponse
 import com.blockvote.android.data.remote.dto.BiometricVerifyRequest
 import com.blockvote.android.data.remote.dto.BiometricVerifyResponse
 import com.blockvote.android.data.remote.dto.CandidatesResponse
@@ -50,14 +51,23 @@ class BlockVoteApi(
             CandidatesResponse::class.java
         )
 
-    fun lookupVoter(email: String, electionId: String): VoterLookupResponse =
+    /** Voter slip by voter ID (EPIC number): identity, home place and home seat. */
+    fun lookupVoter(voterId: String, electionId: String): VoterLookupResponse =
         getJson(
             "api/voters/lookup",
             mapOf(
-                "email" to email,
+                "voterId" to voterId,
                 "electionId" to electionId
             ),
             VoterLookupResponse::class.java
+        )
+
+    /** Only the candidates of the voter's HOME seat, wherever the phone is. */
+    fun getBallot(electionId: String, voterId: String): BallotResponse =
+        getJson(
+            "api/elections/$electionId/ballot",
+            mapOf("voterId" to voterId),
+            BallotResponse::class.java
         )
 
     fun verifyBiometric(body: BiometricVerifyRequest): BiometricVerifyResponse =

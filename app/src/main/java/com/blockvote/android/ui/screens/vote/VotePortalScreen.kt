@@ -1,8 +1,7 @@
 package com.blockvote.android.ui.screens.vote
 
-import androidx.activity.compose.BackHandler
 import android.Manifest
-import com.blockvote.android.data.remote.AssetUrlResolver
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -33,6 +32,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.HowToVote
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.CircularProgressIndicator
@@ -41,26 +41,31 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import com.blockvote.android.data.remote.AssetUrlResolver
 import com.blockvote.android.domain.model.Candidate
-import com.blockvote.android.domain.model.Election
 import com.blockvote.android.ui.components.CameraScanMode
 import com.blockvote.android.ui.components.FaceCaptureCamera
 import com.blockvote.android.ui.components.PrimaryGradientButton
@@ -72,11 +77,9 @@ import com.blockvote.android.ui.theme.NeonIndigo
 import com.blockvote.android.ui.vote.VoteStep
 import com.blockvote.android.ui.vote.VoteUiState
 import com.blockvote.android.ui.vote.VoteViewModel
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.platform.LocalContext
 import com.blockvote.android.util.CoarseLocationHelper
-import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import kotlinx.coroutines.launch
 
@@ -86,19 +89,19 @@ fun VotePortalScreen(
     initialElectionId: String? = null,
     onFinished: () -> Unit,
     onNavigateToElectionDetail: (String) -> Unit = {},
-    onNavigateToTwinRequest: (electionId: String, email: String) -> Unit = { _, _ -> },
+    onNavigateToTwinRequest: (electionId: String, voterId: String) -> Unit = { _, _ -> },
     viewModel: VoteViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
 
     fun handleBack() {
         when (state.step) {
-            VoteStep.ELECTION, VoteStep.SUCCESS -> onFinished()
+            VoteStep.ELECTION, VoteStep.DONE -> onFinished()
             else -> viewModel.goBack()
         }
     }
 
-    // Gesture / system back: previous vote step, then leave screen
+    // Gesture / system back: previous step, then leave the screen
     BackHandler { handleBack() }
 
     LaunchedEffect(initialElectionId) {
@@ -128,8 +131,10 @@ fun VotePortalScreen(
                 onOpenElectionDetail = onNavigateToElectionDetail
             )
             Spacer(modifier = Modifier.height(16.dp))
-            StepIndicator(state.step)
-            Spacer(modifier = Modifier.height(20.dp))
+            if (state.step != VoteStep.ELECTION) {
+                StepIndicator(state.step)
+                Spacer(modifier = Modifier.height(20.dp))
+            }
 
             AnimatedContent(
                 targetState = state.step,
@@ -143,12 +148,13 @@ fun VotePortalScreen(
                 label = "vote-step"
             ) { step ->
                 when (step) {
-                    VoteStep.ELECTION -> ElectionIdStep(state, viewModel, onNavigateToTwinRequest)
-                    VoteStep.EMAIL -> EmailStep(state, viewModel, onNavigateToTwinRequest)
-                    VoteStep.LIVENESS -> LivenessStep(state, viewModel, onNavigateToTwinRequest)
-                    VoteStep.CANDIDATE -> CandidateStep(state, viewModel)
-                    VoteStep.OTP -> OtpStep(state, viewModel)
-                    VoteStep.SUCCESS -> SuccessStep(state, onDone = {
+                    VoteStep.ELECTION -> ElectionIdStep(state, viewModel)
+                    VoteStep.VOTER_ID -> VoterIdStep(state, viewModel, onNavigateToTwinRequest)
+                    VoteStep.SEAT -> SeatStep(state, viewModel)
+                    VoteStep.FACE -> FaceStep(state, viewModel, onNavigateToTwinRequest)
+                    VoteStep.BALLOT -> BallotStep(state, viewModel)
+                    VoteStep.CODE -> CodeStep(state, viewModel)
+                    VoteStep.DONE -> DoneStep(state, onDone = {
                         viewModel.reset()
                         onFinished()
                     })
@@ -181,20 +187,14 @@ private fun VoteHeader(
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = state.selectedElection?.title ?: "BlockVote",
+                text = state.selectedElection?.title ?: "Block Vote",
                 style = MaterialTheme.typography.titleLarge,
                 color = Color.White,
                 fontWeight = FontWeight.Bold
             )
+            val stepNo = VoteStep.VOTER_STEPS.indexOf(state.step) + 1
             Text(
-                text = when (state.step) {
-                    VoteStep.ELECTION -> "Open election from invite link"
-                    VoteStep.EMAIL -> "Verify registered email"
-                    VoteStep.LIVENESS -> "Rotate scan + face verify"
-                    VoteStep.CANDIDATE -> "Select your candidate"
-                    VoteStep.OTP -> "Confirm with email OTP"
-                    VoteStep.SUCCESS -> "Vote recorded on-chain"
-                },
+                text = if (stepNo > 0) "Step $stepNo of ${VoteStep.VOTER_STEPS.size} · ${state.step.label}" else state.step.hint,
                 style = MaterialTheme.typography.bodySmall,
                 color = Color.White.copy(alpha = 0.65f)
             )
@@ -209,44 +209,46 @@ private fun VoteHeader(
         ) {
             Icon(
                 Icons.Default.HowToVote,
-                contentDescription = "Open election details",
+                contentDescription = "About this election",
                 tint = ElectricCyan
             )
         }
     }
 }
 
+/** Six bars, one per voter step, with the current step's plain label beneath. */
 @Composable
 private fun StepIndicator(step: VoteStep) {
-    val steps = listOf(
-        VoteStep.ELECTION, VoteStep.EMAIL, VoteStep.LIVENESS,
-        VoteStep.CANDIDATE, VoteStep.OTP, VoteStep.SUCCESS
-    )
+    val steps = VoteStep.VOTER_STEPS
     val index = steps.indexOf(step).coerceAtLeast(0)
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        steps.forEachIndexed { i, _ ->
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(4.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(
-                        if (i <= index) ElectricCyan else Color.White.copy(alpha = 0.15f)
-                    )
-            )
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            steps.forEachIndexed { i, _ ->
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(
+                            if (i <= index) ElectricCyan else Color.White.copy(alpha = 0.15f)
+                        )
+                )
+            }
         }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = step.hint,
+            color = Color.White.copy(alpha = 0.75f),
+            style = MaterialTheme.typography.bodyMedium
+        )
     }
 }
 
 @Composable
-private fun ElectionIdStep(
-    state: VoteUiState,
-    viewModel: VoteViewModel,
-    onNavigateToTwinRequest: (String, String) -> Unit
-) {
+private fun ElectionIdStep(state: VoteUiState, viewModel: VoteViewModel) {
     Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
         Text(
             text = "Open the link from your invite email, or paste the election ID here.",
@@ -264,67 +266,164 @@ private fun ElectionIdStep(
         ErrorText(state.error)
         Spacer(modifier = Modifier.height(20.dp))
         PrimaryGradientButton(
-            text = "Continue to vote",
+            text = "Start",
             onClick = { viewModel.openElection() },
             modifier = Modifier.fillMaxWidth()
-        )
-        TwinRequestLink(
-            electionId = state.electionIdInput,
-            email = state.emailInput,
-            onNavigate = onNavigateToTwinRequest
         )
     }
 }
 
 @Composable
-private fun EmailStep(
+private fun VoterIdStep(
     state: VoteUiState,
     viewModel: VoteViewModel,
     onNavigateToTwinRequest: (String, String) -> Unit
 ) {
     Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-        Text(
-            text = "Use the email your election admin registered for ${state.selectedElection?.title.orEmpty()}.",
-            color = Color.White.copy(alpha = 0.75f)
-        )
         val hours = state.selectedElection?.votingHours.orEmpty()
-        Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = buildString {
-                if (hours.isNotBlank()) append("Voting hours: $hours. ")
-                append("You can change your vote once in the app — the latest one counts. ")
-                append("A vote at a polling station is final and replaces any app vote.")
+                append("Type the voter ID exactly as printed on your voter card, for example ABC1234567. ")
+                if (hours.isNotBlank()) append("Voting hours: $hours.")
             },
+            color = Color.White.copy(alpha = 0.75f)
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "You will see the candidates of your home area, wherever you are. You can change your vote once in the app; a vote at a polling booth is final.",
             color = Color.White.copy(alpha = 0.55f),
             style = MaterialTheme.typography.bodySmall
         )
         Spacer(modifier = Modifier.height(16.dp))
         OutlinedTextField(
-            value = state.emailInput,
-            onValueChange = viewModel::onEmailChange,
-            label = { Text("Registered email") },
+            value = state.voterIdInput,
+            onValueChange = viewModel::onVoterIdChange,
+            label = { Text("Voter ID") },
             singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Ascii,
+                capitalization = KeyboardCapitalization.Characters
+            ),
             modifier = Modifier.fillMaxWidth()
         )
         ErrorText(state.error)
         Spacer(modifier = Modifier.height(20.dp))
         PrimaryGradientButton(
-            text = "Continue",
-            onClick = viewModel::submitEmail,
+            text = "Find me on the list",
+            onClick = viewModel::submitVoterId,
             modifier = Modifier.fillMaxWidth()
         )
         TwinRequestLink(
             electionId = state.selectedElection?.id ?: state.electionIdInput,
-            email = state.emailInput,
+            voterId = state.voterIdInput,
             onNavigate = onNavigateToTwinRequest
+        )
+    }
+}
+
+/** "Is this you?" — the voter slip from the roll, with the home area they vote for. */
+@Composable
+private fun SeatStep(state: VoteUiState, viewModel: VoteViewModel) {
+    val voter = state.voter
+    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+        Text(
+            text = "Is this you?",
+            color = Color.White,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color.White.copy(alpha = 0.06f))
+                .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(16.dp))
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            SlipRow("Name", voter?.name.orEmpty().ifBlank { "—" })
+            SlipRow("Voter ID", voter?.maskedVoterId.orEmpty().ifBlank { "—" }, mono = true)
+            SlipRow("Email", voter?.maskedEmail.orEmpty().ifBlank { "—" }, mono = true)
+            SlipRow("Home place", voter?.homePlace.orEmpty().ifBlank { "—" })
+            if (!voter?.homePollingStation.isNullOrBlank()) {
+                SlipRow("Home booth", voter?.homePollingStation.orEmpty())
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(FluentBlue.copy(alpha = 0.16f))
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Default.Place, contentDescription = null, tint = ElectricCyan)
+            Spacer(modifier = Modifier.width(12.dp))
+            Column {
+                Text("Your area", color = Color.White.copy(alpha = 0.65f), style = MaterialTheme.typography.labelMedium)
+                Text(
+                    voter?.seatName.orEmpty().ifBlank { state.selectedElection?.title.orEmpty() },
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    "You will see the candidates for this area, wherever you are right now.",
+                    color = Color.White.copy(alpha = 0.6f),
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        }
+        if (voter?.hasVoted == true) {
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = if (voter.stationVoteFinal) {
+                    "A vote has already been cast at a polling booth for this voter. No more votes are allowed."
+                } else {
+                    "You have already voted once in the app. You can change it one time."
+                },
+                color = if (voter.stationVoteFinal) MaterialTheme.colorScheme.error else Color(0xFFFFB74D),
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+        ErrorText(state.error)
+        Spacer(modifier = Modifier.height(20.dp))
+        PrimaryGradientButton(
+            text = "Yes, this is me",
+            enabled = voter?.stationVoteFinal != true,
+            onClick = viewModel::confirmSeat,
+            modifier = Modifier.fillMaxWidth()
+        )
+        TextButton(onClick = viewModel::rejectSeat, modifier = Modifier.fillMaxWidth()) {
+            Text("Not me — enter a different voter ID", color = Color.White.copy(alpha = 0.7f))
+        }
+    }
+}
+
+@Composable
+private fun SlipRow(label: String, value: String, mono: Boolean = false) {
+    Row(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            label,
+            color = Color.White.copy(alpha = 0.6f),
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.width(100.dp)
+        )
+        Text(
+            value,
+            color = Color.White,
+            style = MaterialTheme.typography.bodyMedium,
+            fontFamily = if (mono) FontFamily.Monospace else null,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.weight(1f)
         )
     }
 }
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
-private fun LivenessStep(
+private fun FaceStep(
     state: VoteUiState,
     viewModel: VoteViewModel,
     onNavigateToTwinRequest: (String, String) -> Unit
@@ -339,20 +438,20 @@ private fun LivenessStep(
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
-            text = "Hold the phone at arm's length with one hand so the camera sees more of the room. Then rotate slowly to one side. If anyone else appears, the scan restarts.",
+            text = "Hold the phone at arm's length so the camera sees you clearly, then turn your head slowly to one side. If someone else appears, the check restarts.",
             color = Color.White.copy(alpha = 0.75f),
             style = MaterialTheme.typography.bodySmall
         )
         Spacer(modifier = Modifier.height(12.dp))
         if (!cameraPermission.status.isGranted) {
             PrimaryGradientButton(
-                text = "Allow Camera Access",
+                text = "Allow the camera",
                 onClick = { cameraPermission.launchPermissionRequest() },
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Camera permission is required to continue.",
+                text = "The face check needs the camera to continue.",
                 color = Color(0xFFFF8A80),
                 style = MaterialTheme.typography.bodySmall
             )
@@ -371,20 +470,20 @@ private fun LivenessStep(
         if (!state.error.isNullOrBlank() && !state.loading) {
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = "Tip: remove glasses/sunglasses, open your eyes, and use brighter light.",
+                text = "Tip: take off glasses, keep your eyes open, and find brighter light.",
                 color = Color.White.copy(alpha = 0.7f),
                 style = MaterialTheme.typography.labelSmall
             )
             Spacer(modifier = Modifier.height(8.dp))
             PrimaryGradientButton(
-                text = "Try again — Recapture",
+                text = "Try again",
                 onClick = viewModel::retryLivenessCapture,
                 modifier = Modifier.fillMaxWidth()
             )
         }
         TwinRequestLink(
             electionId = state.selectedElection?.id ?: state.electionIdInput,
-            email = state.emailInput,
+            voterId = state.voter?.voterId ?: state.voterIdInput,
             onNavigate = onNavigateToTwinRequest,
             highlight = !state.error.isNullOrBlank() &&
                 (state.error!!.contains("duplicate", ignoreCase = true) ||
@@ -394,30 +493,56 @@ private fun LivenessStep(
     }
 }
 
+/** Symbol-first ballot: only the candidates of the voter's home area. */
 @Composable
-private fun CandidateStep(state: VoteUiState, viewModel: VoteViewModel) {
+private fun BallotStep(state: VoteUiState, viewModel: VoteViewModel) {
+    val seatName = state.ballot?.seatName.orEmpty().ifBlank { state.voter?.seatName.orEmpty() }
     Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+        if (seatName.isNotBlank()) {
+            Text(
+                text = "Candidates for $seatName",
+                color = Color.White,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+        }
         state.candidates.forEach { candidate ->
-            CandidateRow(
+            CandidateCard(
                 candidate = candidate,
                 selected = state.selectedCandidateId == candidate.id,
                 onClick = { viewModel.selectCandidate(candidate.id) }
             )
             Spacer(modifier = Modifier.height(10.dp))
         }
+        if (state.candidates.isEmpty()) {
+            Text(
+                "No candidates are listed for your area yet.",
+                color = Color.White.copy(alpha = 0.7f)
+            )
+        }
         ErrorText(state.error)
         Spacer(modifier = Modifier.height(16.dp))
         PrimaryGradientButton(
-            text = "Send Email OTP",
+            text = "Send me the code",
+            enabled = state.selectedCandidateId != null,
             onClick = viewModel::sendOtp,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            "We will email a 6-digit code to confirm it is you.",
+            color = Color.White.copy(alpha = 0.55f),
+            style = MaterialTheme.typography.labelSmall,
+            textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth()
         )
     }
 }
 
 @Composable
-private fun CandidateRow(candidate: Candidate, selected: Boolean, onClick: () -> Unit) {
-    val avatarUrl = when {
+private fun CandidateCard(candidate: Candidate, selected: Boolean, onClick: () -> Unit) {
+    val symbolUrl = when {
         candidate.symbolUrl.isNotBlank() -> AssetUrlResolver.resolve(candidate.symbolUrl)
         candidate.imageUrl.isNotBlank() -> AssetUrlResolver.resolve(candidate.imageUrl)
         else -> ""
@@ -425,12 +550,12 @@ private fun CandidateRow(candidate: Candidate, selected: Boolean, onClick: () ->
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (selected) NeonIndigo.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.06f))
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (selected) NeonIndigo.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.06f))
             .border(
-                1.dp,
-                if (selected) FluentBlue else Color.White.copy(alpha = 0.12f),
-                RoundedCornerShape(12.dp)
+                if (selected) 2.dp else 1.dp,
+                if (selected) ElectricCyan else Color.White.copy(alpha = 0.12f),
+                RoundedCornerShape(16.dp)
             )
             .clickable(onClick = onClick)
             .padding(14.dp),
@@ -438,31 +563,42 @@ private fun CandidateRow(candidate: Candidate, selected: Boolean, onClick: () ->
     ) {
         Box(
             modifier = Modifier
-                .size(48.dp)
+                .size(72.dp)
                 .clip(CircleShape)
-                .background(FluentBlue.copy(alpha = 0.12f)),
+                .background(Color.White),
             contentAlignment = Alignment.Center
         ) {
-            if (avatarUrl.isNotBlank()) {
+            if (symbolUrl.isNotBlank()) {
                 AsyncImage(
-                    model = avatarUrl,
-                    contentDescription = "${candidate.name} party symbol",
+                    model = symbolUrl,
+                    contentDescription = "${candidate.party.ifBlank { candidate.name }} symbol",
                     modifier = Modifier
                         .fillMaxSize()
-                        .clip(CircleShape),
-                    contentScale = ContentScale.Crop
+                        .clip(CircleShape)
+                        .padding(6.dp),
+                    contentScale = ContentScale.Fit
                 )
             } else {
-                Text(candidate.name.take(1), color = FluentBlue, fontWeight = FontWeight.Bold)
+                Text(
+                    candidate.party.ifBlank { candidate.name }.take(1),
+                    color = FluentBlue,
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.headlineSmall
+                )
             }
         }
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(candidate.name, color = Color.White, fontWeight = FontWeight.SemiBold)
+            Text(
+                candidate.name,
+                color = Color.White,
+                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.titleMedium
+            )
             Text(
                 candidate.party.ifBlank { "Independent" },
-                color = Color.White.copy(alpha = 0.6f),
-                style = MaterialTheme.typography.bodySmall
+                color = Color.White.copy(alpha = 0.7f),
+                style = MaterialTheme.typography.bodyMedium
             )
             if (candidate.description.isNotBlank()) {
                 Text(
@@ -473,12 +609,15 @@ private fun CandidateRow(candidate: Candidate, selected: Boolean, onClick: () ->
                 )
             }
         }
+        if (selected) {
+            Icon(Icons.Default.CheckCircle, contentDescription = "Selected", tint = ElectricCyan)
+        }
     }
 }
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
-private fun OtpStep(state: VoteUiState, viewModel: VoteViewModel) {
+private fun CodeStep(state: VoteUiState, viewModel: VoteViewModel) {
     val selected = state.candidates.find { it.id == state.selectedCandidateId }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -491,6 +630,11 @@ private fun OtpStep(state: VoteUiState, viewModel: VoteViewModel) {
     }
 
     Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+        Text(
+            text = "We sent a 6-digit code to ${state.codeSentTo.ifBlank { "your email" }}. It works for 5 minutes.",
+            color = Color.White.copy(alpha = 0.8f)
+        )
+        Spacer(modifier = Modifier.height(12.dp))
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -501,9 +645,9 @@ private fun OtpStep(state: VoteUiState, viewModel: VoteViewModel) {
         ) {
             Text(
                 text = if (state.revealCandidate) {
-                    "Voting for: ${selected?.name ?: "—"}"
+                    "Your choice: ${selected?.name ?: "—"}"
                 } else {
-                    "Voting for: ••••••••"
+                    "Your choice: ••••••••"
                 },
                 color = Color.White,
                 modifier = Modifier.weight(1f)
@@ -511,20 +655,20 @@ private fun OtpStep(state: VoteUiState, viewModel: VoteViewModel) {
             IconButton(onClick = viewModel::toggleRevealCandidate) {
                 Icon(
                     if (state.revealCandidate) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                    contentDescription = "Toggle candidate visibility",
+                    contentDescription = "Show or hide your choice",
                     tint = ElectricCyan
                 )
             }
         }
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            "Shoulder-surfing protection: candidate stays hidden while you enter OTP.",
+            "Your choice stays hidden while you type the code, so nobody looking over your shoulder can see it.",
             color = Color.White.copy(alpha = 0.55f),
             style = MaterialTheme.typography.labelSmall
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            "Allow coarse location to improve public geography analytics. Only village/city/state labels are stored — never GPS coordinates.",
+            "Allowing rough location only helps public turnout charts (village, city, state). Exact GPS is never stored, and it never changes which candidates you see.",
             color = Color.White.copy(alpha = 0.55f),
             style = MaterialTheme.typography.labelSmall
         )
@@ -532,7 +676,7 @@ private fun OtpStep(state: VoteUiState, viewModel: VoteViewModel) {
         OutlinedTextField(
             value = state.otpInput,
             onValueChange = viewModel::onOtpChange,
-            label = { Text("6-digit OTP") },
+            label = { Text("6-digit code") },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
             modifier = Modifier.fillMaxWidth()
@@ -540,8 +684,8 @@ private fun OtpStep(state: VoteUiState, viewModel: VoteViewModel) {
         ErrorText(state.error)
         Spacer(modifier = Modifier.height(20.dp))
         PrimaryGradientButton(
-            text = if (state.loading) "Recording vote…" else "Cast Gasless Vote",
-            enabled = !state.loading,
+            text = if (state.loading) "Recording your vote…" else "Confirm my vote",
+            enabled = !state.loading && state.otpInput.length == 6,
             onClick = {
                 if (!viewModel.tryStartCast()) return@PrimaryGradientButton
                 scope.launch {
@@ -559,11 +703,14 @@ private fun OtpStep(state: VoteUiState, viewModel: VoteViewModel) {
             },
             modifier = Modifier.fillMaxWidth()
         )
+        TextButton(onClick = viewModel::sendOtp, enabled = !state.loading, modifier = Modifier.fillMaxWidth()) {
+            Text("Send the code again", color = Color.White.copy(alpha = 0.7f))
+        }
     }
 }
 
 @Composable
-private fun SuccessStep(state: VoteUiState, onDone: () -> Unit) {
+private fun DoneStep(state: VoteUiState, onDone: () -> Unit) {
     val clipboard = LocalClipboardManager.current
     val receipt = state.receipt
     Column(
@@ -580,13 +727,13 @@ private fun SuccessStep(state: VoteUiState, onDone: () -> Unit) {
         )
         Spacer(modifier = Modifier.height(12.dp))
         Text(
-            "Vote relayed on-chain",
+            "Your vote is recorded",
             color = Color.White,
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold
         )
         Text(
-            "Receipt-free: this screen does not restate your candidate choice.",
+            "For your privacy, this screen does not show who you voted for.",
             color = Color.White.copy(alpha = 0.6f),
             textAlign = TextAlign.Center,
             style = MaterialTheme.typography.bodySmall,
@@ -607,24 +754,49 @@ private fun SuccessStep(state: VoteUiState, onDone: () -> Unit) {
                 color = ElectricCyan,
                 fontWeight = FontWeight.SemiBold
             )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = receipt.hash,
-                color = Color.White.copy(alpha = 0.85f),
-                style = MaterialTheme.typography.labelMedium,
-                textAlign = TextAlign.Center
-            )
-            IconButton(onClick = { clipboard.setText(AnnotatedString(receipt.hash)) }) {
-                Icon(Icons.Default.ContentCopy, contentDescription = "Copy tx hash", tint = ElectricCyan)
+            Spacer(modifier = Modifier.height(16.dp))
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color.White.copy(alpha = 0.06f))
+                    .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(16.dp))
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    "Your receipt code",
+                    color = Color.White.copy(alpha = 0.65f),
+                    style = MaterialTheme.typography.labelMedium
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = receipt.receiptCode,
+                    color = Color.White,
+                    fontFamily = FontFamily.Monospace,
+                    style = MaterialTheme.typography.bodySmall,
+                    textAlign = TextAlign.Center
+                )
+                IconButton(onClick = { clipboard.setText(AnnotatedString(receipt.receiptCode)) }) {
+                    Icon(Icons.Default.ContentCopy, contentDescription = "Copy receipt code", tint = ElectricCyan)
+                }
+                Text(
+                    "Keep this code. Anyone can use it to check that your vote was counted — it never shows your choice. A copy was emailed to you.",
+                    color = Color.White.copy(alpha = 0.6f),
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.labelSmall
+                )
             }
+            Spacer(modifier = Modifier.height(12.dp))
             Text(
                 text = when (state.onChainVerified) {
-                    true -> "On-chain verification: confirmed"
-                    false -> "On-chain verification: pending / not found yet"
-                    null -> "On-chain verification: skipped"
+                    true -> "Checked: your vote is on the public record."
+                    false -> "Still being written to the public record. Check again in a minute."
+                    null -> "The public record check was skipped."
                 },
                 color = if (state.onChainVerified == true) EmeraldGreen else Color.White.copy(alpha = 0.6f),
-                style = MaterialTheme.typography.bodySmall
+                style = MaterialTheme.typography.bodySmall,
+                textAlign = TextAlign.Center
             )
         }
         Spacer(modifier = Modifier.height(24.dp))
@@ -635,23 +807,23 @@ private fun SuccessStep(state: VoteUiState, onDone: () -> Unit) {
 @Composable
 private fun TwinRequestLink(
     electionId: String,
-    email: String,
+    voterId: String,
     onNavigate: (String, String) -> Unit,
     highlight: Boolean = false
 ) {
     Spacer(modifier = Modifier.height(16.dp))
     Text(
         text = if (highlight) {
-            "Flagged as a duplicate face? Request twin verification from an admin."
+            "Did the camera confuse you with someone else? Ask staff to approve you."
         } else {
-            "Identical twin? Request admin verification"
+            "Have a twin or look-alike? Ask staff to approve you"
         },
         color = if (highlight) Color(0xFFFFB74D) else Color.White.copy(alpha = 0.55f),
         style = MaterialTheme.typography.labelMedium,
         textAlign = TextAlign.Center,
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onNavigate(electionId, email) }
+            .clickable { onNavigate(electionId, voterId) }
             .padding(vertical = 8.dp)
     )
 }

@@ -2,6 +2,7 @@ package com.blockvote.android.ui.vote
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.blockvote.android.domain.model.Ballot
 import com.blockvote.android.domain.model.Candidate
 import com.blockvote.android.domain.model.Election
 import com.blockvote.android.domain.model.VoteReceipt
@@ -17,32 +18,44 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
-enum class VoteStep {
-    ELECTION,
-    EMAIL,
-    /** Front camera rotation scan + AWS face verify (single step). */
-    LIVENESS,
-    CANDIDATE,
-    OTP,
-    SUCCESS
+/**
+ * The same six steps a voter sees at a polling booth (see VOTER_STEPS on the
+ * web). ELECTION is only shown when the app was opened without an invite link.
+ */
+enum class VoteStep(val label: String, val hint: String) {
+    ELECTION("Open election", "Open the link from your invite email"),
+    VOTER_ID("Enter voter ID", "The number printed on your voter card"),
+    SEAT("Confirm your area", "Check this is you and your home area"),
+    FACE("Face check", "Look at the camera and turn your head slowly"),
+    BALLOT("Choose candidate", "Tap the symbol of the candidate you want"),
+    CODE("Enter code", "Type the 6-digit code we emailed you"),
+    DONE("Done", "Your vote is recorded");
+
+    companion object {
+        /** The six voter-facing steps, in order. */
+        val VOTER_STEPS = listOf(VOTER_ID, SEAT, FACE, BALLOT, CODE, DONE)
+    }
 }
 
 data class VoteUiState(
     val step: VoteStep = VoteStep.ELECTION,
     val electionIdInput: String = "",
-    val emailInput: String = "",
+    val voterIdInput: String = "",
     val otpInput: String = "",
     val selectedElection: Election? = null,
+    val voter: VoterIdentity? = null,
+    val ballot: Ballot? = null,
     val candidates: List<Candidate> = emptyList(),
     val selectedCandidateId: String? = null,
-    val voter: VoterIdentity? = null,
     val biometricToken: String? = null,
+    /** Masked email the code was sent to. */
+    val codeSentTo: String = "",
     val receipt: VoteReceipt? = null,
     val onChainVerified: Boolean? = null,
     val loading: Boolean = false,
     val error: String? = null,
     val revealCandidate: Boolean = false,
-    /** Bumped when AWS face verify fails so the camera unlocks for recapture. */
+    /** Bumped when the face check fails so the camera unlocks for another try. */
     val livenessRetryToken: Int = 0
 )
 
@@ -58,8 +71,9 @@ class VoteViewModel @Inject constructor(
         _state.update { it.copy(electionIdInput = value.trim(), error = null) }
     }
 
-    fun onEmailChange(value: String) {
-        _state.update { it.copy(emailInput = value, error = null) }
+    fun onVoterIdChange(value: String) {
+        val clean = value.uppercase().filter { ch -> ch.isLetterOrDigit() }.take(20)
+        _state.update { it.copy(voterIdInput = clean, error = null) }
     }
 
     fun onOtpChange(value: String) {
@@ -70,93 +84,133 @@ class VoteViewModel @Inject constructor(
         _state.update { it.copy(revealCandidate = !it.revealCandidate) }
     }
 
+    /** Step 0 — open the election from the invite link (or a pasted ID). */
     fun openElection(prefillId: String? = null) {
         if (!prefillId.isNullOrBlank()) {
             _state.update { it.copy(electionIdInput = prefillId.trim()) }
         }
         val electionId = _state.value.electionIdInput
         if (electionId.isBlank()) {
-            _state.update { it.copy(error = "Enter or open your election invite link") }
+            _state.update { it.copy(error = "Open the link from your invite email, or paste the election ID.") }
             return
         }
         viewModelScope.launch {
             _state.update { it.copy(loading = true, error = null) }
             repository.getElection(electionId)
                 .onSuccess { election ->
-                    repository.getCandidates(election.id)
-                        .onSuccess { candidates ->
-                            _state.update {
-                                it.copy(
-                                    loading = false,
-                                    selectedElection = election,
-                                    candidates = candidates,
-                                    step = VoteStep.EMAIL,
-                                    emailInput = "",
-                                    otpInput = "",
-                                    biometricToken = null,
-                                    selectedCandidateId = null,
-                                    voter = null
-                                )
-                            }
-                        }
-                        .onFailure { e ->
-                            _state.update {
-                                it.copy(loading = false, error = e.message ?: "Failed to load candidates")
-                            }
-                        }
+                    _state.update {
+                        it.copy(
+                            loading = false,
+                            selectedElection = election,
+                            step = VoteStep.VOTER_ID,
+                            voterIdInput = "",
+                            otpInput = "",
+                            voter = null,
+                            ballot = null,
+                            candidates = emptyList(),
+                            biometricToken = null,
+                            selectedCandidateId = null,
+                            codeSentTo = ""
+                        )
+                    }
                 }
                 .onFailure { e ->
                     _state.update {
-                        it.copy(loading = false, error = e.message ?: "Election not found or not live")
+                        it.copy(loading = false, error = e.message ?: "This election is not open yet.")
                     }
                 }
         }
     }
 
-    fun submitEmail() {
+    /** Step 1 — find the voter on the roll by voter ID. */
+    fun submitVoterId() {
         val s = _state.value
         val election = s.selectedElection ?: return
-        val email = s.emailInput.trim()
-        if (email.isBlank() || !email.contains("@")) {
-            _state.update { it.copy(error = "Enter a valid registered email") }
+        val voterId = s.voterIdInput
+        if (voterId.length < 6) {
+            _state.update { it.copy(error = "Enter the voter ID printed on your voter card.") }
             return
         }
         viewModelScope.launch {
             _state.update { it.copy(loading = true, error = null) }
-            repository.lookupVoter(email, election.id)
+            repository.lookupVoter(voterId, election.id)
                 .onSuccess { voter ->
                     _state.update {
-                        it.copy(loading = false, voter = voter, step = VoteStep.LIVENESS)
+                        it.copy(loading = false, voter = voter, step = VoteStep.SEAT)
                     }
                 }
                 .onFailure { e ->
                     _state.update {
-                        it.copy(loading = false, error = e.message ?: "Voter not registered")
+                        it.copy(
+                            loading = false,
+                            error = e.message
+                                ?: "This voter ID is not on the list. Check the ID or ask the booth officer."
+                        )
                     }
                 }
         }
     }
 
+    /** Step 2 — "Yes, this is me": load the home ballot, then go to the face check. */
+    fun confirmSeat() {
+        val s = _state.value
+        val election = s.selectedElection ?: return
+        val voter = s.voter ?: return
+        if (voter.stationVoteFinal) {
+            _state.update {
+                it.copy(error = "A vote has already been cast at a polling station for this voter. No more votes are allowed.")
+            }
+            return
+        }
+        viewModelScope.launch {
+            _state.update { it.copy(loading = true, error = null) }
+            repository.getBallot(election.id, voter.voterId)
+                .onSuccess { ballot ->
+                    if (ballot.candidates.isEmpty()) {
+                        _state.update {
+                            it.copy(
+                                loading = false,
+                                ballot = ballot,
+                                error = ballot.message.ifBlank { "No candidates are listed for your area yet." }
+                            )
+                        }
+                    } else {
+                        _state.update {
+                            it.copy(
+                                loading = false,
+                                ballot = ballot,
+                                candidates = ballot.candidates,
+                                step = VoteStep.FACE
+                            )
+                        }
+                    }
+                }
+                .onFailure { e ->
+                    _state.update {
+                        it.copy(loading = false, error = e.message ?: "Could not load your ballot. Please try again.")
+                    }
+                }
+        }
+    }
+
+    /** "Not me" on the slip — back to the voter ID field. */
+    fun rejectSeat() {
+        _state.update { it.copy(step = VoteStep.VOTER_ID, voter = null, ballot = null, error = null) }
+    }
+
     fun onLivenessCaptured(imageDataUrl: String) = onFaceVerified(imageDataUrl)
 
+    /** Step 3 — face check. */
     fun onFaceVerified(imageDataUrl: String) {
         val s = _state.value
         val voter = s.voter
         val election = s.selectedElection
         if (voter == null) {
-            _state.update {
-                it.copy(error = "Complete email verification before face capture.")
-            }
+            _state.update { it.copy(error = "Enter your voter ID first.") }
             return
         }
         if (election == null) {
-            _state.update { it.copy(error = "Election not loaded.") }
-            return
-        }
-        if (voter.nullifierHash.isBlank()) {
-            _state.update {
-                it.copy(error = "Voter identity missing. Go back and re-enter your email.")
-            }
+            _state.update { it.copy(error = "This election is not open yet.") }
             return
         }
         viewModelScope.launch {
@@ -164,16 +218,15 @@ class VoteViewModel @Inject constructor(
             repository.verifyFace(voter.nullifierHash, imageDataUrl, election.id)
                 .onSuccess { token ->
                     _state.update {
-                        it.copy(loading = false, biometricToken = token, step = VoteStep.CANDIDATE)
+                        it.copy(loading = false, biometricToken = token, step = VoteStep.BALLOT)
                     }
                 }
                 .onFailure { e ->
-                    val msg = e.message ?: "Face verification failed"
                     _state.update {
                         it.copy(
                             loading = false,
-                            error = msg,
-                            step = VoteStep.LIVENESS,
+                            error = e.message ?: "Face check did not pass. Try again in better light.",
+                            step = VoteStep.FACE,
                             livenessRetryToken = it.livenessRetryToken + 1
                         )
                     }
@@ -181,13 +234,13 @@ class VoteViewModel @Inject constructor(
         }
     }
 
-    /** Unlock camera for another photo after AWS rejection (glasses, lighting, etc.). */
+    /** Unlock the camera for another photo (glasses, lighting, etc.). */
     fun retryLivenessCapture() {
         _state.update {
             it.copy(
                 loading = false,
                 error = null,
-                step = VoteStep.LIVENESS,
+                step = VoteStep.FACE,
                 livenessRetryToken = it.livenessRetryToken + 1
             )
         }
@@ -212,29 +265,33 @@ class VoteViewModel @Inject constructor(
         _state.update { it.copy(loading = false, error = message) }
     }
 
+    /** Step 4 → 5 — "Send me the code". */
     fun sendOtp() {
         val s = _state.value
         val election = s.selectedElection ?: return
+        val voter = s.voter ?: return
         val candidateId = s.selectedCandidateId ?: run {
-            _state.update { it.copy(error = "Select a candidate first") }
+            _state.update { it.copy(error = "Tap a candidate first.") }
             return
         }
         viewModelScope.launch {
             _state.update { it.copy(loading = true, error = null) }
-            repository.sendOtp(s.emailInput, election.id)
-                .onSuccess {
+            repository.sendOtp(voter.voterId, election.id)
+                .onSuccess { sentTo ->
                     _state.update {
                         it.copy(
                             loading = false,
-                            step = VoteStep.OTP,
+                            step = VoteStep.CODE,
                             selectedCandidateId = candidateId,
+                            codeSentTo = sentTo,
+                            otpInput = "",
                             revealCandidate = false
                         )
                     }
                 }
                 .onFailure { e ->
                     _state.update {
-                        it.copy(loading = false, error = e.message ?: "Failed to send OTP")
+                        it.copy(loading = false, error = e.message ?: "Could not send the code. Please try again.")
                     }
                 }
         }
@@ -248,27 +305,33 @@ class VoteViewModel @Inject constructor(
      */
     fun tryStartCast(): Boolean {
         val s = _state.value
-        if (s.step == VoteStep.SUCCESS || s.loading) return false
+        if (s.step == VoteStep.DONE || s.loading) return false
         if (!castGate.compareAndSet(false, true)) return false
         if (s.otpInput.length != 6) {
             castGate.set(false)
-            _state.update { it.copy(error = "Enter the 6-digit OTP from your email") }
+            _state.update { it.copy(error = "Enter the 6-digit code from your email.") }
             return false
         }
         _state.update { it.copy(loading = true, error = null) }
         return true
     }
 
+    /** Step 5 → 6 — "Confirm my vote". */
     fun castVote(location: CoarseLocation? = null) {
         val s = _state.value
         val election = s.selectedElection ?: run {
             castGate.set(false)
-            _state.update { it.copy(loading = false, error = "Select an election first") }
+            _state.update { it.copy(loading = false, error = "This election is not open yet.") }
+            return
+        }
+        val voter = s.voter ?: run {
+            castGate.set(false)
+            _state.update { it.copy(loading = false, error = "Enter your voter ID first.") }
             return
         }
         val candidateId = s.selectedCandidateId?.toIntOrNull() ?: run {
             castGate.set(false)
-            _state.update { it.copy(loading = false, error = "Select a candidate first") }
+            _state.update { it.copy(loading = false, error = "Tap a candidate first.") }
             return
         }
         val token = s.biometricToken.orEmpty()
@@ -276,7 +339,7 @@ class VoteViewModel @Inject constructor(
         viewModelScope.launch {
             _state.update { it.copy(loading = true, error = null) }
             repository.castVote(
-                email = s.emailInput,
+                voterId = voter.voterId,
                 otp = s.otpInput,
                 electionId = election.id,
                 candidateId = candidateId,
@@ -290,13 +353,13 @@ class VoteViewModel @Inject constructor(
                         loading = false,
                         receipt = receipt.copy(onChainVerified = verified),
                         onChainVerified = verified,
-                        step = VoteStep.SUCCESS
+                        step = VoteStep.DONE
                     )
                 }
             }.onFailure { e ->
                 castGate.set(false)
                 _state.update {
-                    it.copy(loading = false, error = e.message ?: "Vote failed")
+                    it.copy(loading = false, error = e.message ?: "Your vote could not be recorded. Please try again.")
                 }
             }
         }
@@ -305,10 +368,11 @@ class VoteViewModel @Inject constructor(
     fun goBack() {
         _state.update { s ->
             when (s.step) {
-                VoteStep.EMAIL -> s.copy(step = VoteStep.ELECTION, error = null)
-                VoteStep.LIVENESS -> s.copy(step = VoteStep.EMAIL, error = null)
-                VoteStep.CANDIDATE -> s.copy(step = VoteStep.LIVENESS, error = null)
-                VoteStep.OTP -> s.copy(step = VoteStep.CANDIDATE, error = null)
+                VoteStep.VOTER_ID -> s.copy(step = VoteStep.ELECTION, error = null)
+                VoteStep.SEAT -> s.copy(step = VoteStep.VOTER_ID, error = null)
+                VoteStep.FACE -> s.copy(step = VoteStep.SEAT, error = null)
+                VoteStep.BALLOT -> s.copy(step = VoteStep.FACE, error = null)
+                VoteStep.CODE -> s.copy(step = VoteStep.BALLOT, error = null)
                 else -> s
             }
         }

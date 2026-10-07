@@ -15,7 +15,13 @@ export default async function StationVotePage() {
 
   return (
     <VoterWebPortal
-      station={{ stationName: station.stationName, electionId: station.electionId }}
+      station={{
+        stationName: station.stationName,
+        electionId: station.electionId,
+        state: station.state || '',
+        district: station.district || '',
+        boothCode: station.boothCode || '',
+      }}
     />
   );
 }

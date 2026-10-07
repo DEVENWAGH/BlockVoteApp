@@ -1,7 +1,26 @@
 import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import BiometricHash from '@/lib/models/BiometricHash';
+import Enrollment from '@/lib/models/Enrollment';
 import Voter from '@/lib/models/Voter';
+
+/** nullifierHash → { name, email, voterId } for one election. */
+async function identityMap(electionId, extraNullifiers = []) {
+  const enrollments = await Enrollment.find(
+    { $or: [{ electionId }, { nullifierHash: { $in: extraNullifiers } }] },
+    { voterId: 1, nullifierHash: 1 },
+  ).lean();
+  const voterIds = [...new Set(enrollments.map((e) => e.voterId))];
+  const people = await Voter.find({ voterId: { $in: voterIds } }).select('voterId name email').lean();
+  const personById = new Map(people.map((p) => [p.voterId, p]));
+  const map = new Map();
+  for (const e of enrollments) {
+    if (!e.nullifierHash) continue;
+    const p = personById.get(e.voterId);
+    map.set(e.nullifierHash, { name: p?.name || '', email: p?.email || '', voterId: e.voterId });
+  }
+  return map;
+}
 
 // GET /api/admin/twin-requests?electionId=...
 export async function GET(req) {
@@ -15,67 +34,49 @@ export async function GET(req) {
 
     await connectDB();
 
-    const directQuery = { electionId, twinVerificationStatus: { $ne: 'none' } };
-    const directRecords = await BiometricHash.find(directQuery).lean();
+    const directRecords = await BiometricHash.find({ electionId, twinVerificationStatus: { $ne: 'none' } }).lean();
 
-    const voterQuery = { electionId };
-    const voters = await Voter.find(voterQuery).select('name email nullifierHash').lean();
-    const voterMap = new Map(voters.map(v => [v.nullifierHash, v]));
-    const nullifierHashes = voters.map(v => v.nullifierHash).filter(Boolean);
+    const enrolledNullifiers = (
+      await Enrollment.find({ electionId }, { nullifierHash: 1 }).lean()
+    ).map((e) => e.nullifierHash).filter(Boolean);
 
     let legacyRecords = [];
-    if (nullifierHashes.length > 0) {
-      const directNullifiers = new Set(directRecords.map(r => r.nullifierHash));
+    if (enrolledNullifiers.length > 0) {
+      const directNullifiers = new Set(directRecords.map((r) => r.nullifierHash));
       legacyRecords = await BiometricHash.find({
-        nullifierHash: { $in: nullifierHashes },
+        nullifierHash: { $in: enrolledNullifiers, $nin: [...directNullifiers] },
         twinVerificationStatus: { $ne: 'none' },
-        ...(directNullifiers.size > 0 ? { nullifierHash: { $in: nullifierHashes, $nin: [...directNullifiers] } } : {}),
       }).lean();
     }
 
-    // Merge and de-duplicate by nullifierHash
     const allRecordsMap = new Map();
     for (const r of [...directRecords, ...legacyRecords]) {
-      if (!allRecordsMap.has(r.nullifierHash)) {
-        allRecordsMap.set(r.nullifierHash, r);
-      }
+      if (!allRecordsMap.has(r.nullifierHash)) allRecordsMap.set(r.nullifierHash, r);
     }
     const allRecords = [...allRecordsMap.values()];
 
-    // Map biometric records to enriched response objects
-    const requests = await Promise.all(allRecords.map(async (record) => {
-      // Try to find voter info from voterMap (Strategy 2 path) or by direct lookup
-      let voter = voterMap.get(record.nullifierHash);
-      if (!voter) {
-        voter = await Voter.findOne({ nullifierHash: record.nullifierHash }).select('name email').lean();
-      }
+    const matchedNullifiers = allRecords.map((r) => r.twinMatchedNullifier).filter(Boolean);
+    const identities = await identityMap(electionId, [...allRecords.map((r) => r.nullifierHash), ...matchedNullifiers]);
 
-      // Look up the matched voter's details
-      let matchedVoterName = 'Unknown';
-      let matchedVoterEmail = record.twinMatchedEmail || 'Unknown';
-      if (record.twinMatchedNullifier) {
-        const mv = await Voter.findOne({ nullifierHash: record.twinMatchedNullifier }).select('name email').lean();
-        if (mv) {
-          matchedVoterName = mv.name;
-          matchedVoterEmail = mv.email;
-        }
-      }
-
+    const requests = allRecords.map((record) => {
+      const voter = identities.get(record.nullifierHash);
+      const matched = record.twinMatchedNullifier ? identities.get(record.twinMatchedNullifier) : null;
       return {
         id: record._id,
         nullifierHash: record.nullifierHash,
         name: voter?.name || 'Unknown Voter',
         email: voter?.email || 'Unknown Email',
+        voterId: voter?.voterId || '',
         twinVerificationStatus: record.twinVerificationStatus,
         bypassDuplicateCheck: record.bypassDuplicateCheck,
         twinMatchedNullifier: record.twinMatchedNullifier,
-        twinMatchedEmail: matchedVoterEmail,
-        twinMatchedName: matchedVoterName,
+        twinMatchedEmail: matched?.email || record.twinMatchedEmail || 'Unknown',
+        twinMatchedName: matched?.name || 'Unknown',
         twinMatchSimilarity: record.twinMatchSimilarity,
         twinNotes: record.twinNotes || '',
         updatedAt: record.updatedAt,
       };
-    }));
+    });
 
     return NextResponse.json({ success: true, requests });
   } catch (err) {

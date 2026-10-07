@@ -10,7 +10,7 @@
  * saving gas fees and reducing network congestion.
  */
 import connectDB from '@/lib/db';
-import Voter from '@/lib/models/Voter';
+import Enrollment from '@/lib/models/Enrollment';
 import Election from '@/lib/models/Election';
 import { getVotingWindowStatus } from '@/lib/votingWindow';
 import { checkVoteAllowance, VOTE_CHANNEL } from '@/lib/voteAllowance';
@@ -20,7 +20,7 @@ import { checkVoteAllowance, VOTE_CHANNEL } from '@/lib/voteAllowance';
  * Returns { allowed, reason, code, latencyMs, isRevote?, votingWindow? }
  * 
  * Checks performed (all from MongoDB cache — no blockchain query):
- * 1. Is the voter registered on-chain for this specific election?
+ * 1. Is the voter enrolled and registered on-chain for this specific election?
  * 2. Is the election in the Voting phase?
  * 3. Is it within the daily polling hours and the election's dates?
  * 4. Does the voter have a ballot left? (app: 2 casts; station: final override)
@@ -37,12 +37,12 @@ export async function preflightCheck(
 
   await connectDB();
 
-  const voter = await Voter.findOne(
+  const enrollment = await Enrollment.findOne(
     { nullifierHash, electionId: String(electionId), status: 'registered' },
     { _id: 1, votesCast: 1, stationVoteFinal: 1 }
   ).lean();
 
-  if (!voter) {
+  if (!enrollment) {
     return {
       allowed: false,
       reason: 'Voter not registered. Registration is required before voting.',
@@ -101,7 +101,7 @@ export async function preflightCheck(
     };
   }
 
-  const allowance = checkVoteAllowance(voter, channel);
+  const allowance = checkVoteAllowance(enrollment, channel);
   return {
     ...allowance,
     votingWindow,

@@ -9,11 +9,12 @@ import { NextResponse } from 'next/server';
 import connectDB from '@/lib/db';
 import Election from '@/lib/models/Election';
 import { relayTransitionPhase } from '@/lib/relay';
-import Voter from '@/lib/models/Voter';
 import Admin from '@/lib/models/Admin';
 import { sendVoteInviteEmail } from '@/lib/mailer';
 import { getVoteDeepLink, getVoteInviteUrl } from '@/lib/appLinks';
 import { verifyGuardianAction } from '@/lib/guardianAuth';
+import { sendInvitesForElection } from '@/lib/invites';
+import { electionChecklist } from '@/lib/checklist';
 
 export async function POST(req) {
   try {
@@ -60,7 +61,16 @@ export async function POST(req) {
       });
     }
 
-    // ACTION: approve
+    // ACTION: approve — every checklist item must be green first.
+    const checklist = await electionChecklist(electionDoc);
+    if (!checklist.ready) {
+      const blockers = checklist.items.filter((i) => !i.ok).map((i) => i.label);
+      return NextResponse.json(
+        { error: `Not ready to open voting: ${blockers.join('; ')}.`, checklist },
+        { status: 400 },
+      );
+    }
+
     // Transition on-chain: Registration(0) → Voting(1)
     const { txHash } = await relayTransitionPhase(String(electionId), 1, electionDoc.orgSlug);
 
@@ -86,33 +96,21 @@ export async function POST(req) {
     });
     const deepLink = getVoteDeepLink(String(electionId));
 
-    const voters = await Voter.find({
+    const invitesSent = await sendInvitesForElection({
       electionId: String(electionId),
-      status: 'registered',
-      $or: [{ inviteSentAt: null }, { inviteSentAt: { $exists: false } }],
-    }).limit(500);
-
-    let invitesSent = 0;
-    for (const voter of voters) {
-      try {
-        await sendVoteInviteEmail(voter.email, {
-          voterName: voter.name,
-          electionTitle: electionDoc.title,
-          inviteUrl,
-          deepLink,
-        });
-        await Voter.findByIdAndUpdate(voter._id, { inviteSentAt: new Date() });
-        invitesSent++;
-      } catch (inviteErr) {
-        console.warn('[admin/elections/approve] invite failed', voter.email, inviteErr.message);
-      }
-    }
+      electionTitle: electionDoc.title,
+      inviteUrl,
+      deepLink,
+      onlyUnsent: true,
+      limit: 500,
+      send: sendVoteInviteEmail,
+    });
 
     return NextResponse.json({
       success: true,
       txHash,
       invitesSent,
-      message: `Election #${electionId} approved and is now LIVE for voters!`,
+      message: `Voting is now open for "${electionDoc.title}".`,
     });
   } catch (err) {
     console.error('[admin/elections/approve POST]', err);

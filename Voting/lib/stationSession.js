@@ -22,7 +22,20 @@ function sign(encodedPayload) {
   return base64url(crypto.createHmac('sha256', signingKey()).update(encodedPayload).digest());
 }
 
-export function issueStationToken({ electionId, stationName, adminId }) {
+/**
+ * Issue a booth session. `boothId`/`boothCode`/`state`/`district` describe the
+ * physical booth; they are recorded on each ballot as *where* it was cast and
+ * never decide *which* ballot the voter sees.
+ */
+export function issueStationToken({
+  electionId,
+  stationName,
+  adminId,
+  boothId = '',
+  boothCode = '',
+  state = '',
+  district = '',
+}) {
   const now = Math.floor(Date.now() / 1000);
   const payload = {
     typ: 'station',
@@ -33,6 +46,10 @@ export function issueStationToken({ electionId, stationName, adminId }) {
     iat: now,
     exp: now + STATION_TTL_SECONDS,
   };
+  if (boothId) payload.boothId = String(boothId);
+  if (boothCode) payload.boothCode = String(boothCode).trim().toUpperCase().slice(0, 32);
+  if (state) payload.state = String(state).trim().slice(0, 60);
+  if (district) payload.district = String(district).trim().slice(0, 60);
   const encodedPayload = base64url(JSON.stringify(payload));
   return { token: `${encodedPayload}.${sign(encodedPayload)}`, payload };
 }

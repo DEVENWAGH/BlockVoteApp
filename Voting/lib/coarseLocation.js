@@ -71,22 +71,26 @@ export async function reverseGeocode(lat, lng) {
   });
 }
 
-export async function applyCoarseLocationToVoter(voterId, location) {
-  if (!voterId || !location) return;
-
+/**
+ * Shape a coarse vote-time place for `Enrollment.capturedLocality`.
+ *
+ * This is analytics-only. It is stored on the enrollment, never on the master
+ * roll, so a voter standing in Mumbai still votes for — and stays registered
+ * in — their home village.
+ */
+export function toCapturedLocality(location) {
+  if (!location) return null;
   const normalized = normalizeCoarseLocation(location);
-  if (!normalized) return;
-
-  const Voter = (await import('./models/Voter.js')).default;
-  const update = {
-    locationCapturedAt: new Date(),
+  if (!normalized) return null;
+  return {
+    village: normalized.village,
+    city: normalized.city,
+    state: normalized.state,
+    localityType: normalized.localityType,
   };
+}
 
-  if (normalized.village) update.village = normalized.village;
-  if (normalized.city) update.city = normalized.city;
-  if (normalized.state) update.state = normalized.state;
-  if (normalized.region) update.region = normalized.region;
-  if (normalized.localityType) update.localityType = normalized.localityType;
-
-  await Voter.findByIdAndUpdate(voterId, { $set: update });
+/** @deprecated Home address is never updated from GPS. Kept so old callers fail soft. */
+export async function applyCoarseLocationToVoter() {
+  return;
 }

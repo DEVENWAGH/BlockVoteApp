@@ -8,7 +8,7 @@ import ThemeToggle from '@/components/ThemeToggle';
 function TwinRequestContent() {
   const searchParams = useSearchParams();
   const [electionId, setElectionId] = useState(searchParams.get('electionId') || '');
-  const [email, setEmail] = useState(searchParams.get('email') || '');
+  const [voterId, setVoterId] = useState(searchParams.get('voterId') || '');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -21,12 +21,13 @@ function TwinRequestContent() {
     setSuccess('');
     setLoading(true);
     try {
+      const cleanId = voterId.toUpperCase().replace(/[^A-Z0-9]/g, '');
       const lookupRes = await fetch(
-        `/api/voters/lookup?email=${encodeURIComponent(email.trim())}&electionId=${encodeURIComponent(electionId.trim())}`
+        `/api/voters/lookup?voterId=${encodeURIComponent(cleanId)}&electionId=${encodeURIComponent(electionId.trim())}`
       );
       const lookup = await lookupRes.json();
       if (!lookupRes.ok || !lookup.nullifierHash) {
-        throw new Error(lookup.error || 'Voter not found for this election');
+        throw new Error(lookup.error || 'This voter ID is not on the list. Check the ID or ask the booth officer.');
       }
 
       const res = await fetch('/api/biometric/twin-request', {
@@ -35,17 +36,16 @@ function TwinRequestContent() {
         body: JSON.stringify({
           nullifierHash: lookup.nullifierHash,
           electionId: electionId.trim(),
-          email: email.trim(),
           notes: notes.trim(),
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Request failed');
+      if (!res.ok) throw new Error(data.error || 'Could not send the request. Please try again.');
 
-      setSuccess(data.message || 'Twin verification request submitted.');
+      setSuccess(data.message || 'Your request was sent. Staff will review it.');
       setStatus(data.status || 'pending');
     } catch (err) {
-      setError(err.message || 'Something went wrong');
+      setError(err.message || 'Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -65,11 +65,11 @@ function TwinRequestContent() {
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-primary">
             <Users size={18} />
-            <h1 className="text-xl font-semibold">Twin Verification Request</h1>
+            <h1 className="text-xl font-semibold">Look-alike check</h1>
           </div>
           <p className="text-body text-sm">
-            If you and a sibling share very similar facial features, our biometric system may flag you as a duplicate voter.
-            Submit a request so an election admin can verify you are distinct people.
+            If the face check said your face matches someone else (for example a twin), send this request.
+            Election staff review it and can approve you to continue.
           </p>
         </div>
 
@@ -105,24 +105,25 @@ function TwinRequestContent() {
             />
           </label>
           <label className="block space-y-1.5">
-            <span className="text-xs font-semibold text-body uppercase tracking-wide">Registered Email</span>
+            <span className="text-xs font-semibold text-body uppercase tracking-wide">Voter ID</span>
             <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              type="text"
+              value={voterId}
+              onChange={(e) => setVoterId(e.target.value.toUpperCase())}
               required
-              className="w-full bg-surface-soft border border-hairline rounded-lg px-3 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary/30"
-              placeholder="you@university.edu"
+              autoCapitalize="characters"
+              className="w-full bg-surface-soft border border-hairline rounded-lg px-3 py-2.5 text-sm text-ink font-mono focus:outline-none focus:ring-2 focus:ring-primary/30"
+              placeholder="As printed on your voter card, e.g. ABC1234567"
             />
           </label>
           <label className="block space-y-1.5">
-            <span className="text-xs font-semibold text-body uppercase tracking-wide">Notes for Admin (optional)</span>
+            <span className="text-xs font-semibold text-body uppercase tracking-wide">Note for staff (optional)</span>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={3}
               className="w-full bg-surface-soft border border-hairline rounded-lg px-3 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
-              placeholder="e.g. Identical twin — my sibling is already registered"
+              placeholder="e.g. I have an identical twin who is also on the roll"
             />
           </label>
           <button
@@ -130,12 +131,12 @@ function TwinRequestContent() {
             disabled={loading}
             className="w-full bg-primary hover:bg-primary-active disabled:opacity-60 text-white font-semibold text-sm py-3 rounded-full transition flex items-center justify-center gap-2"
           >
-            {loading ? <><Loader2 size={16} className="animate-spin" /> Submitting…</> : 'Submit Twin Verification Request'}
+            {loading ? <><Loader2 size={16} className="animate-spin" /> Sending…</> : 'Send request'}
           </button>
         </form>
 
         <p className="text-muted text-xs text-center">
-          Admins review requests in the election dashboard under Twin Verification Overrides.
+          Staff see requests on their dashboard under &quot;Face check&quot;. Once approved, try the face check again.
         </p>
       </main>
     </div>

@@ -1,20 +1,20 @@
-name,email,phone,gender,age
-Kalpit Mhatre,kalpitam25hmca@student.mes.ac.in,8765912438,Male,22
-Deven Wagh,deveniw25hmca@student.mes.ac.in,9347826150,Male,23
-Rohit Zagade,rohitrz25hmca@student.mes.ac.in,8916247530,Male,24
-Tejas Lavate,tejasrl25hmca@student.mes.ac.in,9783124568,Male,23
-Amogh Kalyanshetty,amoghpk25hmca@student.mes.ac.in,8459172630,Male,21
-Parag Gonji,paragpg25hmca@student.mes.ac.in,9237618450,Male,22
-Chirag Mhatre,chiragcm25hmca@student.mes.ac.in,8873416259,Male,26
-Ashish Mhatre,ashishnm25hmca@student.mes.ac.in,9562187340,Male,28
-Yogesh Salve,yogeshds25hmca@student.mes.ac.in,8145729368,Male,42
-Vikas Bhosale,vikassb25hmca@student.mes.ac.in,9673401825,Male,51
-Aditya Chorghe,adityanc25hmca@student.mes.ac.in,8825197643,Male,26
-Mihir Latke,mihirpl25hmca@student.mes.ac.in,9418265730,Male,59
-Devesh Shinde,deveshrs25hmca@student.mes.ac.in,8591736240,Male,32
-Sahil Misal,sahilsm25hmca@student.mes.ac.in,9734618250,Male,35
-Vedant Karade,vedantsk25hmca@student.mes.ac.in,8264957318,Male,45
-Aditya Patil,adityaap25hmca@student.mes.ac.in,9185726430,Male,19
-Om,omnnhmca@student.mes.ac.in,8647135290,Male,55
-Vaishakh Nair,vaishakhnairr28@gmail.com,9528461730,Male,36
-Shashank,shashanksb25hmca@student.mes.ac.in,9265837140,Male,50
+voterId,name,email,phone,gender,age,state,district,city,village,ward,partNo,homePollingStation,assemblyConstituency,parliamentaryConstituency
+MES0000001,Kalpit Mhatre,kalpitam25hmca@student.mes.ac.in,8765912438,Male,22,Maharashtra,Raigad,Panvel,,7,101,MES Pillai College Hall,MH-AC-188,MH-PC-32
+MES0000002,Deven Wagh,deveniw25hmca@student.mes.ac.in,9347826150,Male,23,Maharashtra,Raigad,Panvel,,7,101,MES Pillai College Hall,MH-AC-188,MH-PC-32
+MES0000003,Rohit Zagade,rohitrz25hmca@student.mes.ac.in,8916247530,Male,24,Maharashtra,Raigad,,Kalamboli,3,102,ZP School Kalamboli,MH-AC-188,MH-PC-32
+MES0000004,Tejas Lavate,tejasrl25hmca@student.mes.ac.in,9783124568,Male,23,Maharashtra,Satara,,Malkapur,4,12,ZP School Malkapur,MH-AC-258,MH-PC-45
+MES0000005,Amogh Kalyanshetty,amoghpk25hmca@student.mes.ac.in,8459172630,Male,21,Maharashtra,Satara,,Malkapur,2,12,ZP School Malkapur,MH-AC-258,MH-PC-45
+MES0000006,Parag Gonji,paragpg25hmca@student.mes.ac.in,9237618450,Male,22,Maharashtra,Pune,Pune,,17,88,Municipal School Kothrud,MH-AC-210,MH-PC-34
+MES0000007,Chirag Mhatre,chiragcm25hmca@student.mes.ac.in,8873416259,Male,26,Maharashtra,Raigad,Panvel,,8,103,Panvel Municipal School,MH-AC-188,MH-PC-32
+MES0000008,Ashish Mhatre,ashishnm25hmca@student.mes.ac.in,9562187340,Male,28,Maharashtra,Raigad,Panvel,,8,103,Panvel Municipal School,MH-AC-188,MH-PC-32
+MES0000009,Yogesh Salve,yogeshds25hmca@student.mes.ac.in,8145729368,Male,42,Maharashtra,Pune,Pune,,17,88,Municipal School Kothrud,MH-AC-210,MH-PC-34
+MES0000010,Vikas Bhosale,vikassb25hmca@student.mes.ac.in,9673401825,Male,51,Maharashtra,Satara,,Malkapur,4,12,ZP School Malkapur,MH-AC-258,MH-PC-45
+MES0000011,Aditya Chorghe,adityanc25hmca@student.mes.ac.in,8825197643,Male,26,Maharashtra,Pune,Pune,,18,89,Municipal School Karve Nagar,MH-AC-210,MH-PC-34
+MES0000012,Mihir Latke,mihirpl25hmca@student.mes.ac.in,9418265730,Male,59,Maharashtra,Raigad,,Kalamboli,3,102,ZP School Kalamboli,MH-AC-188,MH-PC-32
+MES0000013,Devesh Shinde,deveshrs25hmca@student.mes.ac.in,8591736240,Male,32,Maharashtra,Satara,,Malkapur,2,12,ZP School Malkapur,MH-AC-258,MH-PC-45
+MES0000014,Sahil Misal,sahilsm25hmca@student.mes.ac.in,9734618250,Male,35,Maharashtra,Pune,Pune,,18,89,Municipal School Karve Nagar,MH-AC-210,MH-PC-34
+MES0000015,Vedant Karade,vedantsk25hmca@student.mes.ac.in,8264957318,Male,45,Maharashtra,Raigad,Panvel,,7,101,MES Pillai College Hall,MH-AC-188,MH-PC-32
+MES0000016,Aditya Patil,adityaap25hmca@student.mes.ac.in,9185726430,Male,19,Maharashtra,Satara,,Malkapur,4,12,ZP School Malkapur,MH-AC-258,MH-PC-45
+MES0000017,Om,omnnhmca@student.mes.ac.in,8647135290,Male,55,Maharashtra,Pune,Pune,,17,88,Municipal School Kothrud,MH-AC-210,MH-PC-34
+MES0000018,Vaishakh Nair,vaishakhnairr28@gmail.com,9528461730,Male,36,Maharashtra,Raigad,Panvel,,8,103,Panvel Municipal School,MH-AC-188,MH-PC-32
+MES0000019,Shashank,shashanksb25hmca@student.mes.ac.in,9265837140,Male,50,Maharashtra,Pune,Pune,,18,89,Municipal School Karve Nagar,MH-AC-210,MH-PC-34

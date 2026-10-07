@@ -1,99 +1,124 @@
 /**
  * POST /api/auth/verify-otp
  * Verify email OTP + biometric token, then relay castVote.
- * Android app votes use the "app" allowance (first vote + one change);
- * requests from an activated polling-station computer cast a final "station" vote.
+ *
+ * Body: { voterId, otp, electionId, candidateId, biometricToken?, location? }
+ * (`email` still accepted for rows migrated from the old per-election roster)
+ *
+ * - The candidate must be on the voter's HOME ballot (same constituency).
+ *   The booth the voter is standing at never changes which ballot they get.
+ * - Android app votes use the "app" allowance (first vote + one change);
+ *   requests from an activated polling-station computer cast a final "station" vote.
+ * - The booth is recorded on the enrollment as where the vote was cast.
  */
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/db";
-import Voter from "@/lib/models/Voter";
 import EmailOTP from "@/lib/models/EmailOTP";
+import Election from "@/lib/models/Election";
+import Candidate from "@/lib/models/Candidate";
 import { preflightCheck } from "@/lib/preflightCache";
 import { relayCastVote, relayRegisterVoter, isVoterRegisteredOnChain } from "@/lib/relay";
 import { sendVoteReceiptEmail } from "@/lib/mailer";
 import bcrypt from "bcryptjs";
 import { verifyBiometricToken } from "@/lib/biometric";
-import { computeNullifierHash } from "@/lib/voterIdentity";
-import { applyCoarseLocationToVoter } from "@/lib/coarseLocation";
+import { toCapturedLocality } from "@/lib/coarseLocation";
 import { getStationSession } from "@/lib/stationSession";
 import { VOTE_CHANNEL, appVotesRemainingAfter } from "@/lib/voteAllowance";
-import { reserveVoteSlot, releaseVoteSlot, acquireCastLock, releaseCastLock } from "@/lib/voteLedger";
+import {
+  reserveVoteSlot,
+  releaseVoteSlot,
+  acquireCastLock,
+  releaseCastLock,
+  recordCastPlace,
+} from "@/lib/voteLedger";
 import { getPublicBaseUrl } from "@/lib/serverEnv";
+import { findVoterAndEnrollment, hasOpenCase, ensureEnrollmentNullifier } from "@/lib/enrollment";
+import { usesSeatFiltering } from "@/lib/seats";
+import { VOTER_MESSAGES } from "@/lib/voterMessages";
+
+function alreadyRecorded(record, fallbackChannel) {
+  return NextResponse.json({
+    success: true,
+    alreadyRecorded: true,
+    message: record.resultMessage || "Your vote was already recorded. It was not submitted again.",
+    txHash: record.resultTxHash,
+    receiptCode: record.resultTxHash,
+    verifyUrl: record.resultVerifyUrl || "",
+    channel: record.resultChannel || fallbackChannel,
+    isRevote: Boolean(record.resultIsRevote),
+    isFinal: record.resultChannel === VOTE_CHANNEL.STATION || record.resultVotesRemaining === 0,
+    votesRemaining: record.resultVotesRemaining,
+  });
+}
 
 export async function POST(req) {
   try {
-    const { email, otp, electionId, candidateId, biometricToken: bodyToken, location } = await req.json();
+    const {
+      voterId,
+      email,
+      otp,
+      electionId,
+      candidateId,
+      biometricToken: bodyToken,
+      location,
+    } = await req.json();
     const biometricToken = req.headers.get("x-biometric-token") || bodyToken;
 
     if (
-      !email ||
+      (!voterId && !email) ||
       !otp ||
       electionId === undefined ||
       electionId === null ||
       electionId === "" ||
-      candidateId === undefined
+      candidateId === undefined ||
+      candidateId === null
     ) {
       return NextResponse.json(
-        { error: "email, otp, electionId, and candidateId are required." },
+        { error: "voterId, otp, electionId, and candidateId are required." },
         { status: 400 },
       );
     }
 
     await connectDB();
-
-    const cleanEmail = email.toLowerCase().trim();
     const eid = String(electionId);
 
-    const record = await EmailOTP.findOne({
-      email: cleanEmail,
-      purpose: "vote",
-      electionId: eid,
-    });
+    const { voter, enrollment } = await findVoterAndEnrollment({ electionId: eid, voterId, email });
+    if (!voter) {
+      return NextResponse.json({ error: VOTER_MESSAGES.NOT_ON_LIST, code: "NOT_ON_LIST" }, { status: 404 });
+    }
+    if (!enrollment) {
+      return NextResponse.json({ error: VOTER_MESSAGES.NOT_ENROLLED, code: "NOT_ENROLLED" }, { status: 404 });
+    }
+    if (await hasOpenCase(voter.voterId)) {
+      return NextResponse.json({ error: VOTER_MESSAGES.CASE_OPEN, code: "CASE_OPEN" }, { status: 403 });
+    }
 
+    const cleanEmail = voter.email;
+
+    const record = await EmailOTP.findOne({ email: cleanEmail, purpose: "vote", electionId: eid });
     if (!record) {
       return NextResponse.json(
-        {
-          error:
-            "OTP has expired or has already been used. Please request a new one.",
-        },
+        { error: "The code has expired or was already used. Please ask for a new code." },
         { status: 400 },
       );
     }
 
-    if (record.used && record.resultTxHash) {
-      return NextResponse.json({
-        success: true,
-        alreadyRecorded: true,
-        message: record.resultMessage || "Your vote was already recorded. It was not submitted again.",
-        txHash: record.resultTxHash,
-        verifyUrl: record.resultVerifyUrl || "",
-        channel: record.resultChannel || VOTE_CHANNEL.APP,
-        isRevote: Boolean(record.resultIsRevote),
-        isFinal: record.resultChannel === VOTE_CHANNEL.STATION || record.resultVotesRemaining === 0,
-        votesRemaining: record.resultVotesRemaining,
-      });
-    }
+    if (record.used && record.resultTxHash) return alreadyRecorded(record, VOTE_CHANNEL.APP);
 
     if (record.used) {
       return NextResponse.json(
-        {
-          error:
-            "OTP has expired or has already been used. Please request a new one.",
-        },
+        { error: "The code has expired or was already used. Please ask for a new code." },
         { status: 400 },
       );
     }
 
     if (new Date() > record.expiresAt) {
-      return NextResponse.json(
-        { error: "OTP has expired. Please request a new one." },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "The code has expired. Please ask for a new code." }, { status: 400 });
     }
 
     if (record.attempts >= 3) {
       return NextResponse.json(
-        { error: "Too many incorrect attempts. Please request a new OTP." },
+        { error: "Too many wrong codes. Please ask for a new code." },
         { status: 400 },
       );
     }
@@ -104,92 +129,46 @@ export async function POST(req) {
       await record.save();
       const remaining = 3 - record.attempts;
       return NextResponse.json(
-        {
-          error: `Incorrect OTP. ${remaining} attempt${remaining !== 1 ? "s" : ""} remaining.`,
-        },
+        { error: `That code is not right. ${remaining} attempt${remaining !== 1 ? "s" : ""} left.` },
         { status: 400 },
       );
     }
 
-    const voter = await Voter.findOne({ electionId: eid, email: cleanEmail });
-    if (!voter) {
-      return NextResponse.json(
-        {
-          error:
-            "Email is not registered for this election. Please check with your election admin.",
-        },
-        { status: 404 },
-      );
-    }
+    // ── Register on-chain if this person was enrolled but not yet registered ──
+    let nullifierHash = ensureEnrollmentNullifier(enrollment, eid);
 
-    let nullifierHash = voter.nullifierHash;
-
-    if (voter.status === "pending" || !nullifierHash) {
-      nullifierHash = computeNullifierHash(cleanEmail);
-
+    if (enrollment.status === "pending") {
       try {
         const alreadyOnChain = await isVoterRegisteredOnChain(eid, nullifierHash);
         if (alreadyOnChain) {
-          await Voter.findByIdAndUpdate(voter._id, {
-            status: "registered",
-            nullifierHash,
-            registeredAt: new Date(),
-            onChainTxHash: "auto-linked",
-            rejectionReason: "",
-          });
-          voter.status = "registered";
-          voter.nullifierHash = nullifierHash;
+          enrollment.onChainTxHash = enrollment.onChainTxHash || "auto-linked";
         } else {
           const { txHash } = await relayRegisterVoter(eid, nullifierHash);
-          await Voter.findByIdAndUpdate(voter._id, {
-            status: "registered",
-            nullifierHash,
-            registeredAt: new Date(),
-            onChainTxHash: txHash,
-            rejectionReason: "",
-          });
-          voter.status = "registered";
-          voter.nullifierHash = nullifierHash;
+          enrollment.onChainTxHash = txHash;
         }
+        enrollment.status = "registered";
+        enrollment.registeredAt = new Date();
+        enrollment.rejectionReason = "";
+        await enrollment.save();
       } catch (regErr) {
-        console.error(`[verify-otp] Auto-registration failed for ${cleanEmail}:`, regErr.message);
+        console.error(`[verify-otp] Auto-registration failed for ${voter.voterId}:`, regErr.message);
         return NextResponse.json(
-          {
-            error:
-              "Your voter registration could not be finalized on the blockchain. Please contact your election admin.",
-          },
+          { error: "Your registration could not be completed right now. Please ask the booth officer." },
           { status: 403 },
         );
       }
+    } else if (enrollment.isModified()) {
+      await enrollment.save();
     }
 
-    if (voter.status !== "registered") {
-      return NextResponse.json(
-        {
-          error: `Voter registration status is "${voter.status}". Please contact your admin.`,
-        },
-        { status: 403 },
-      );
+    if (enrollment.status !== "registered") {
+      return NextResponse.json({ error: VOTER_MESSAGES.REJECTED, code: "REJECTED" }, { status: 403 });
     }
 
-    if (!voter.nullifierHash) {
-      return NextResponse.json(
-        {
-          error:
-            "Voter on-chain registration is incomplete. Please contact your admin.",
-        },
-        { status: 403 },
-      );
-    }
-
-    nullifierHash = voter.nullifierHash;
-
+    // ── Face check must be bound to this voter ──
     if (!biometricToken) {
       return NextResponse.json(
-        {
-          error:
-            "Biometric session verification required. Please verify your face first.",
-        },
+        { error: "Please complete the face check first." },
         { status: 403 },
       );
     }
@@ -201,10 +180,7 @@ export async function POST(req) {
       decodedBiometric.nullifierHash !== nullifierHash
     ) {
       return NextResponse.json(
-        {
-          error:
-            "Biometric authentication is invalid or expired. Please verify your face again.",
-        },
+        { error: "The face check has expired. Please do the face check again." },
         { status: 403 },
       );
     }
@@ -213,18 +189,28 @@ export async function POST(req) {
     const channel =
       station && station.electionId === eid ? VOTE_CHANNEL.STATION : VOTE_CHANNEL.APP;
 
+    // ── The candidate must be on this voter's home ballot ──
+    const election = await Election.findOne({ electionId: eid }).lean();
+    if (!election) {
+      return NextResponse.json({ error: "Election not found." }, { status: 404 });
+    }
+    const cid = Number(candidateId);
+    if (!Number.isInteger(cid) || cid < 0) {
+      return NextResponse.json({ error: VOTER_MESSAGES.WRONG_SEAT, code: "WRONG_SEAT" }, { status: 400 });
+    }
+    const candidate = await Candidate.findOne({ electionId: eid, candidateId: cid }).lean();
+    if (usesSeatFiltering(election)) {
+      if (!candidate || (candidate.constituencyCode || "") !== (enrollment.constituencyCode || "")) {
+        return NextResponse.json({ error: VOTER_MESSAGES.WRONG_SEAT, code: "WRONG_SEAT" }, { status: 403 });
+      }
+    }
+
     const checkResult = await preflightCheck(nullifierHash, eid, { channel });
     if (!checkResult.allowed) {
       return NextResponse.json(
         { error: checkResult.reason, code: checkResult.code },
         { status: 403 },
       );
-    }
-
-    try {
-      await applyCoarseLocationToVoter(voter._id, location);
-    } catch (locationErr) {
-      console.warn('[verify-otp] coarse location update skipped:', locationErr.message);
     }
 
     const claimed = await EmailOTP.findOneAndUpdate(
@@ -242,49 +228,32 @@ export async function POST(req) {
     );
     if (!claimed) {
       const latest = await EmailOTP.findById(record._id).lean();
-      if (latest?.resultTxHash) {
-        return NextResponse.json({
-          success: true,
-          alreadyRecorded: true,
-          message: latest.resultMessage || "Your vote was already recorded. It was not submitted again.",
-          txHash: latest.resultTxHash,
-          verifyUrl: latest.resultVerifyUrl || "",
-          channel: latest.resultChannel || channel,
-          isRevote: Boolean(latest.resultIsRevote),
-          isFinal: latest.resultChannel === VOTE_CHANNEL.STATION || latest.resultVotesRemaining === 0,
-          votesRemaining: latest.resultVotesRemaining,
-        });
-      }
+      if (latest?.resultTxHash) return alreadyRecorded(latest, channel);
       return NextResponse.json(
-        {
-          error: "Your vote is already being recorded. Wait for the confirmation and do not submit the OTP again.",
-        },
+        { error: "Your vote is already being recorded. Please wait for the confirmation." },
         { status: 409 },
       );
     }
 
-    const locked = await acquireCastLock(voter._id);
+    const unclaim = () =>
+      EmailOTP.updateOne({ _id: record._id, used: { $ne: true } }, { $set: { claimedAt: null } });
+
+    const locked = await acquireCastLock(enrollment._id);
     if (!locked) {
-      await EmailOTP.updateOne(
-        { _id: record._id, used: { $ne: true } },
-        { $set: { claimedAt: null } },
-      );
+      await unclaim();
       return NextResponse.json(
-        { error: "Your vote is already being recorded. Wait for the confirmation and do not submit the OTP again." },
+        { error: "Your vote is already being recorded. Please wait for the confirmation." },
         { status: 409 },
       );
     }
 
     let before;
     try {
-      before = await reserveVoteSlot(voter._id, channel);
+      before = await reserveVoteSlot(enrollment._id, channel);
       if (!before) {
         const recheck = await preflightCheck(nullifierHash, eid, { channel });
-        await releaseCastLock(voter._id);
-        await EmailOTP.updateOne(
-          { _id: record._id, used: { $ne: true } },
-          { $set: { claimedAt: null } },
-        );
+        await releaseCastLock(enrollment._id);
+        await unclaim();
         return NextResponse.json(
           {
             error: recheck.allowed ? "Another vote is already being processed. Please wait." : recheck.reason,
@@ -294,35 +263,37 @@ export async function POST(req) {
         );
       }
     } catch (reserveErr) {
-      await releaseCastLock(voter._id);
-      await EmailOTP.updateOne(
-        { _id: record._id, used: { $ne: true } },
-        { $set: { claimedAt: null } },
-      );
+      await releaseCastLock(enrollment._id);
+      await unclaim();
       throw reserveErr;
     }
 
     let txHash;
     let isRevote;
     try {
-      ({ txHash, isRevote } = await relayCastVote(eid, Number(candidateId), nullifierHash, { channel }));
+      ({ txHash, isRevote } = await relayCastVote(eid, cid, nullifierHash, { channel }));
     } catch (relayErr) {
-      await releaseVoteSlot(voter._id, before);
-      await releaseCastLock(voter._id);
-      await EmailOTP.updateOne(
-        { _id: record._id, used: { $ne: true } },
-        { $set: { claimedAt: null } },
-      );
+      await releaseVoteSlot(enrollment._id, before);
+      await releaseCastLock(enrollment._id);
+      await unclaim();
       throw relayErr;
     }
 
-    await releaseCastLock(voter._id);
+    await releaseCastLock(enrollment._id);
+
+    // Where the vote was cast — analytics only, never the home seat.
+    try {
+      await recordCastPlace(enrollment._id, {
+        channel,
+        booth: station,
+        locality: toCapturedLocality(location),
+      });
+    } catch (placeErr) {
+      console.warn("[verify-otp] cast place not recorded:", placeErr.message);
+    }
 
     const votesCast = (Number(before.votesCast) || 0) + 1;
     const votesRemaining = appVotesRemainingAfter(votesCast, channel);
-
-    const Election = (await import("@/lib/models/Election")).default;
-    const election = await Election.findOne({ electionId: eid }).lean();
 
     const verifyUrl = `${getPublicBaseUrl()}/verify?txHash=${encodeURIComponent(txHash)}`;
 
@@ -336,15 +307,15 @@ export async function POST(req) {
       console.error("[verify-otp] receipt email failed:", mailErr);
     }
 
-    let message = "Vote successfully relayed and recorded on the blockchain.";
+    let message;
     if (channel === VOTE_CHANNEL.STATION) {
       message = isRevote
-        ? "Polling-station vote recorded. It replaced your earlier app vote and is now final."
-        : "Polling-station vote recorded. It is final.";
+        ? "Your vote is recorded. It replaced your earlier vote from the app and is now final."
+        : "Your vote is recorded. It is final.";
     } else if (isRevote) {
-      message = "Your vote was changed. This was your last change in the app — only a polling-station vote can replace it now.";
+      message = "Your vote was changed. This was your last change in the app — only a vote at a polling station can replace it now.";
     } else {
-      message = "Vote recorded. You can change it once more from the app if you change your mind.";
+      message = "Your vote is recorded. You can change it once from the app if you change your mind.";
     }
 
     record.used = true;
@@ -360,11 +331,14 @@ export async function POST(req) {
       success: true,
       message,
       txHash,
+      receiptCode: txHash,
       verifyUrl,
       channel,
       isRevote: Boolean(isRevote),
       isFinal: channel === VOTE_CHANNEL.STATION || votesRemaining === 0,
       votesRemaining,
+      candidateName: candidate?.name || "",
+      party: candidate?.party || "",
     });
   } catch (err) {
     console.error("[verify-otp]", err);
@@ -384,19 +358,17 @@ export async function POST(req) {
     }
 
     if (reason.includes("voter not registered")) {
-      userMessage =
-        "Your voter registration is not yet finalized on the blockchain. Please contact your election admin.";
+      userMessage = "Your registration is not complete yet. Please ask the booth officer.";
     } else if (reason.includes("already voted")) {
-      userMessage =
-        "Your vote has already been recorded on the blockchain for this election.";
+      userMessage = "Your vote has already been recorded for this election.";
     } else if (
       reason.includes("election not active") ||
       reason.includes("not in voting phase") ||
       reason.includes("not voting phase")
     ) {
-      userMessage = "This election is no longer accepting votes.";
+      userMessage = VOTER_MESSAGES.CLOSED;
     } else if (reason.includes("invalid candidate")) {
-      userMessage = "The selected candidate is not valid for this election.";
+      userMessage = VOTER_MESSAGES.WRONG_SEAT;
     }
 
     return NextResponse.json({ error: userMessage }, { status: 500 });

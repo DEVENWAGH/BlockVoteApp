@@ -1,5 +1,27 @@
 import mongoose from "mongoose";
 
+/**
+ * Poll level. One election is one level.
+ * - general:   one flat ballot for everyone enrolled (legacy / club elections)
+ * - panchayat: gram panchayat / village ward
+ * - municipal: city ward
+ * - assembly:  MLA seat
+ * - loksabha:  MP seat
+ */
+export const ELECTION_LEVELS = ["general", "panchayat", "municipal", "assembly", "loksabha"];
+
+const EnrollmentRuleSchema = new mongoose.Schema(
+  {
+    label: { type: String, default: "" },
+    scope: { type: Object, default: {} },
+    matched: { type: Number, default: 0 },
+    enrolled: { type: Number, default: 0 },
+    skippedCases: { type: Number, default: 0 },
+    at: { type: Date, default: Date.now },
+  },
+  { _id: false },
+);
+
 const ElectionSchema = new mongoose.Schema(
   {
     electionId: { type: String, required: true, unique: true, index: true },
@@ -21,6 +43,11 @@ const ElectionSchema = new mongoose.Schema(
     blockNumber: { type: Number },
     candidateCount: { type: Number, default: 0 },
     totalVotes: { type: Number, default: 0 },
+
+    /** Which seat each voter's ballot is chosen from. */
+    level: { type: String, enum: ELECTION_LEVELS, default: "general" },
+    /** Places staff included from the master roll ("Include voters in Karad North"). */
+    enrollmentRules: { type: [EnrollmentRuleSchema], default: [] },
 
     guardianApproved: { type: Boolean, default: false },
     guardianApprovedBy: { type: String, default: "" },

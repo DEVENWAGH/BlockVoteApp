@@ -1,33 +1,56 @@
 /**
  * POST /api/voters/upload-csv
- * Upsert voters for an election and register them on-chain.
+ * Import the master electoral roll (one row per person, keyed by voter ID).
+ *
+ * - Rows are NOT tied to an election. Pass `electionId` to also enroll the
+ *   imported people into that election (same as the "Include voters" button).
+ * - Rows with missing required fields or an unknown seat code become a
+ *   "missing" guardian case. Rows that clash with someone already on the roll
+ *   become a "duplicate" case. Identical rows are skipped silently.
+ * - Up to 50,000 rows per file, written in chunks.
  */
 import { NextResponse } from "next/server";
 import { parse } from "csv-parse/sync";
 import connectDB from "@/lib/db";
 import Voter from "@/lib/models/Voter";
+import VoterCase from "@/lib/models/VoterCase";
+import Constituency from "@/lib/models/Constituency";
 import Election from "@/lib/models/Election";
 import { pinJSON, getIPFSUrl } from "@/lib/ipfs";
-import { relayRegisterVoter, resetRelayNonce, isVoterRegisteredOnChain } from "@/lib/relay";
-import { computeNullifierHash, isAlreadyRegisteredError } from "@/lib/voterIdentity";
 import { auth } from "@/auth";
+import {
+  mapHeaders,
+  rowFromRecord,
+  classifyRow,
+  ROLL_COLUMNS,
+} from "@/lib/rollValidation";
+import { enrollVotersByScope, registerPendingEnrollments } from "@/lib/enrollment";
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024;
-const MAX_ROWS = 10_000;
-const REQUIRED_COLUMNS = ["name", "email"];
+const MAX_FILE_SIZE = 20 * 1024 * 1024;
+const MAX_ROWS = 50_000;
+const CHUNK = 2000;
+const REQUIRED_HEADERS = ["voterId", "name", "email"];
+const FIRST_BATCH_ON_CHAIN = 25;
 
-function validateEmail(e) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+function chunked(arr, size) {
+  const out = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
 }
-function validatePhone(p) {
-  return !p || /^\d{10}$/.test(p.replace(/\s/g, ""));
+
+function snapshot(voter) {
+  if (!voter) return null;
+  const { _id, __v, createdBy, ...rest } = voter;
+  return rest;
 }
+
+import { getAdminOrGuardian } from '@/lib/adminSession';
 
 export async function POST(req) {
   try {
-    const session = await auth();
-    if (!session?.user?.adminId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const authResult = await getAdminOrGuardian(req);
+    if (!authResult?.ok) {
+      return NextResponse.json({ error: "Unauthorized — Guardian or Admin access required" }, { status: 401 });
     }
 
     await connectDB();
@@ -35,35 +58,26 @@ export async function POST(req) {
     const formData = await req.formData();
     const file = formData.get("file");
     const electionIdRaw = formData.get("electionId");
+    const electionId = electionIdRaw ? String(electionIdRaw).trim() : "";
 
     if (!file) {
       return NextResponse.json({ error: "No file received" }, { status: 400 });
     }
-    if (electionIdRaw == null || electionIdRaw === "") {
-      return NextResponse.json(
-        { error: "electionId is required" },
-        { status: 400 },
-      );
-    }
-    const electionId = String(electionIdRaw).trim();
 
-    const election = await Election.findOne({ electionId }).lean();
-    if (!election) {
-      return NextResponse.json({ error: "Election not found" }, { status: 404 });
-    }
-    if (
-      election.createdBy &&
-      String(election.createdBy) !== String(session.user.adminId)
-    ) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    let election = null;
+    if (electionId) {
+      election = await Election.findOne({ electionId }).lean();
+      if (!election) {
+        return NextResponse.json({ error: "Election not found" }, { status: 404 });
+      }
+      if (election.createdBy && String(election.createdBy) !== String(session.user.adminId)) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
     }
 
     const bytes = await file.arrayBuffer();
     if (bytes.byteLength > MAX_FILE_SIZE) {
-      return NextResponse.json(
-        { error: "File exceeds 5MB limit" },
-        { status: 413 },
-      );
+      return NextResponse.json({ error: "File exceeds 20MB limit" }, { status: 413 });
     }
 
     const csvText = new TextDecoder().decode(bytes);
@@ -75,6 +89,7 @@ export async function POST(req) {
         skip_empty_lines: true,
         trim: true,
         bom: true,
+        relax_column_count: true,
       });
     } catch {
       return NextResponse.json(
@@ -88,218 +103,203 @@ export async function POST(req) {
     }
     if (records.length > MAX_ROWS) {
       return NextResponse.json(
-        { error: `CSV exceeds ${MAX_ROWS} row limit` },
+        { error: `CSV exceeds ${MAX_ROWS.toLocaleString()} row limit. Split the file and upload again.` },
         { status: 400 },
       );
     }
 
-    const headers = Object.keys(records[0]).map((h) => h.toLowerCase().trim());
-    for (const col of REQUIRED_COLUMNS) {
-      if (!headers.includes(col)) {
-        return NextResponse.json(
-          {
-            error: `Missing required column: "${col}". Required: ${REQUIRED_COLUMNS.join(", ")}`,
-          },
-          { status: 400 },
-        );
-      }
+    const { mapping, unknown } = mapHeaders(Object.keys(records[0]));
+    const present = new Set(Object.values(mapping));
+    const missingHeaders = REQUIRED_HEADERS.filter((c) => !present.has(c));
+    if (missingHeaders.length) {
+      return NextResponse.json(
+        {
+          error: `Missing required column${missingHeaders.length > 1 ? "s" : ""}: ${missingHeaders.join(", ")}. Expected columns: ${ROLL_COLUMNS.join(", ")}.`,
+        },
+        { status: 400 },
+      );
     }
 
-    const validVoters = [];
-    const errors = [];
-    const seenEmails = new Set();
+    // Known seat codes (all levels) — a seat on the row must exist.
+    const seatDocs = await Constituency.find({}, { code: 1 }).lean();
+    const seatCodes = new Set(seatDocs.map((s) => s.code));
 
-    for (let i = 0; i < records.length; i++) {
-      const row = records[i];
-      const rowNum = i + 2;
-      const name = (row.name || "").trim();
-      const email = (row.email || "").toLowerCase().trim();
-      const phone = (row.phone || "").trim();
-      const gender = (row.gender || "").trim();
-      const ageRaw = (row.age || "").trim();
-      const age = ageRaw ? parseInt(ageRaw, 10) : null;
-      const region = (row.region || row.state || "").trim();
-      const state = (row.state || row.region || "").trim();
-      const city = (row.city || "").trim();
-      const village = (row.village || row.locality || "").trim();
-      const localityType = (row.localityType || row.locality || "").trim();
-      const cityTier = (row.cityTier || row.tier || "").trim();
+    // Normalize every row first so we can pre-load existing people in bulk.
+    const rows = records.map((record, i) => ({ rowNumber: i + 2, row: rowFromRecord(record, mapping) }));
 
-      const rowErrors = [];
-      if (!name || name.length < 2)
-        rowErrors.push("name is required (min 2 chars)");
-      if (!email) rowErrors.push("email is required");
-      else if (!validateEmail(email)) rowErrors.push("invalid email format");
-      if (phone && !validatePhone(phone))
-        rowErrors.push("phone must be 10 digits");
-      if (ageRaw && (isNaN(age) || age < 1 || age > 150))
-        rowErrors.push("age must be 1–150");
-      if (seenEmails.has(email)) rowErrors.push("duplicate email in file");
+    const fileVoterIds = [...new Set(rows.map((r) => r.row.voterId).filter(Boolean))];
+    const fileEmails = [...new Set(rows.map((r) => r.row.email).filter(Boolean))];
+    const filePhones = [...new Set(rows.map((r) => r.row.phone).filter(Boolean))];
 
-      if (rowErrors.length > 0) {
-        errors.push({
-          row: rowNum,
-          email: email || "—",
-          reason: rowErrors.join("; "),
-        });
+    const byVoterId = new Map();
+    const byEmail = new Map();
+    const byPhone = new Map();
+
+    const addExisting = (voter) => {
+      byVoterId.set(voter.voterId, voter);
+      if (voter.email && !byEmail.has(voter.email)) byEmail.set(voter.email, voter);
+      if (voter.phone) {
+        const list = byPhone.get(voter.phone) || [];
+        if (!list.some((v) => v.voterId === voter.voterId)) list.push(voter);
+        byPhone.set(voter.phone, list);
+      }
+    };
+
+    for (const ids of chunked(fileVoterIds, CHUNK)) {
+      (await Voter.find({ voterId: { $in: ids } }).lean()).forEach(addExisting);
+    }
+    for (const emails of chunked(fileEmails, CHUNK)) {
+      (await Voter.find({ email: { $in: emails } }).lean()).forEach(addExisting);
+    }
+    for (const phones of chunked(filePhones, CHUNK)) {
+      (await Voter.find({ phone: { $in: phones } }).lean()).forEach(addExisting);
+    }
+
+    const seenInFile = new Set();
+    const toInsert = [];
+    const cases = [];
+    const unchangedIds = [];
+    let skipped = 0;
+
+    const sourceFile = String(file.name || "roll.csv").slice(0, 120);
+
+    for (const { rowNumber, row } of rows) {
+      const result = classifyRow(row, { byVoterId, byEmail, byPhone, seenInFile, seatCodes });
+
+      if (result.action === "add") {
+        seenInFile.add(row.voterId);
+        toInsert.push(row);
         continue;
       }
-
-      seenEmails.add(email);
-      validVoters.push({
-        electionId,
-        name,
-        email,
-        phone,
-        gender,
-        age,
-        region,
-        state,
-        city,
-        village,
-        localityType,
-        cityTier,
+      if (result.action === "skip") {
+        seenInFile.add(row.voterId);
+        unchangedIds.push(row.voterId);
+        skipped += 1;
+        continue;
+      }
+      if (row.voterId) seenInFile.add(row.voterId);
+      cases.push({
+        kind: result.action,
+        reasons: result.reasons,
+        matchedOn: result.matchedOn,
+        newRow: row,
+        existingVoterId: result.existing?.voterId || "",
+        existingSnapshot: snapshot(result.existing),
+        sourceFile,
+        rowNumber,
+        createdBy: session.user.adminId,
       });
     }
 
-    let upserted = 0;
-    let updated = 0;
-
-    if (validVoters.length > 0) {
-      const ops = validVoters.map((v) => ({
+    // Insert new people in chunks.
+    let added = 0;
+    const now = new Date();
+    for (const batch of chunked(toInsert, CHUNK)) {
+      const ops = batch.map((v) => ({
         updateOne: {
-          filter: { electionId, email: v.email },
+          filter: { voterId: v.voterId },
           update: {
-            $set: {
-              name: v.name,
-              phone: v.phone,
-              gender: v.gender,
-              age: v.age,
-              region: v.region,
-              state: v.state,
-              city: v.city,
-              village: v.village,
-              localityType: v.localityType,
-              cityTier: v.cityTier,
-            },
             $setOnInsert: {
-              electionId,
-              email: v.email,
-              status: "pending",
+              ...v,
+              source: "csv",
+              createdBy: session.user.adminId,
             },
+            $set: { lastImportedAt: now },
           },
           upsert: true,
         },
       }));
+      const res = await Voter.bulkWrite(ops, { ordered: false });
+      added += res.upsertedCount || 0;
+    }
 
-      const result = await Voter.bulkWrite(ops, { ordered: false });
-      upserted = result.upsertedCount;
-      updated = result.modifiedCount;
+    // Open guardian cases. A re-upload of the same row replaces its open case
+    // instead of piling up a second one.
+    let casesOpened = 0;
+    if (cases.length) {
+      const caseVoterIds = [...new Set(cases.map((c) => c.newRow.voterId).filter(Boolean))];
+      if (caseVoterIds.length) {
+        for (const ids of chunked(caseVoterIds, CHUNK)) {
+          await VoterCase.deleteMany({ status: "open", "newRow.voterId": { $in: ids }, sourceFile });
+        }
+      }
+      for (const batch of chunked(cases, CHUNK)) {
+        const inserted = await VoterCase.insertMany(batch, { ordered: false });
+        casesOpened += inserted.length;
+      }
     }
 
     let ipfsCid = "";
     try {
       ipfsCid = await pinJSON(
         {
-          type: "voter-roster",
-          version: "1.0",
-          electionId,
-          totalVoters: validVoters.length,
-          voterEmails: validVoters.map((v) => v.email),
-          uploadedAt: new Date().toISOString(),
+          type: "master-roll-import",
+          version: "2.0",
+          rows: records.length,
+          added,
+          unchanged: skipped,
+          casesOpened,
+          voterIds: toInsert.map((v) => v.voterId),
+          uploadedAt: now.toISOString(),
         },
-        `voter-roster-${electionId.slice(0, 10)}-${Date.now()}`,
-        { electionId, type: "voter-roster" },
+        `master-roll-${Date.now()}`,
+        { type: "master-roll-import" },
       );
     } catch (ipfsErr) {
       console.warn("[upload-csv] IPFS pin failed (non-fatal):", ipfsErr.message);
     }
 
-    let registered = 0;
-    let linked = 0;
-    let regFailed = 0;
-    const regErrors = [];
-
-    const pendingVoters = await Voter.find({
-      electionId,
-      status: "pending",
-    });
-
-    if (pendingVoters.length > 0) {
-      resetRelayNonce();
-
-      for (const voter of pendingVoters) {
-        const label = voter.memberId || voter.email;
-        const nullifierHash = computeNullifierHash(voter.email);
-
-        try {
-          try {
-            if (await isVoterRegisteredOnChain(electionId, nullifierHash)) {
-              await Voter.findByIdAndUpdate(voter._id, {
-                status: "registered",
-                nullifierHash,
-                registeredAt: new Date(),
-                onChainTxHash: "linked-existing",
-                rejectionReason: "",
-              });
-              linked++;
-              continue;
-            }
-          } catch (checkErr) {
-            console.warn(`[upload-csv] on-chain check failed for ${label}:`, checkErr.message);
-          }
-
-          const { txHash } = await relayRegisterVoter(electionId, nullifierHash);
-          await Voter.findByIdAndUpdate(voter._id, {
-            status: "registered",
-            nullifierHash,
-            registeredAt: new Date(),
-            onChainTxHash: txHash,
-            rejectionReason: "",
-          });
-          registered++;
-        } catch (regErr) {
-          if (isAlreadyRegisteredError(regErr)) {
-            await Voter.findByIdAndUpdate(voter._id, {
-              status: "registered",
-              nullifierHash,
-              registeredAt: new Date(),
-              onChainTxHash: "linked-existing",
-              rejectionReason: "",
-            });
-            linked++;
-          } else {
-            console.error(`[upload-csv] auto-register failed for ${label}:`, regErr.message);
-            await Voter.findByIdAndUpdate(voter._id, {
-              status: "rejected",
-              nullifierHash,
-              rejectionReason: regErr.message,
-            });
-            regErrors.push(label);
-            regFailed++;
-          }
-        }
+    // Optional: enroll the imported people into an election right away.
+    let enrollment = null;
+    if (election) {
+      const voterIds = [...toInsert.map((v) => v.voterId), ...unchangedIds];
+      if (voterIds.length) {
+        const summary = await enrollVotersByScope({
+          election,
+          scope: { voterIds },
+          adminId: session.user.adminId,
+        });
+        await Election.updateOne(
+          { electionId },
+          {
+            $push: {
+              enrollmentRules: {
+                label: `CSV import: ${sourceFile}`,
+                scope: { source: sourceFile },
+                matched: summary.matched,
+                enrolled: summary.enrolled,
+                skippedCases: summary.skippedCases,
+                at: new Date(),
+              },
+            },
+          },
+        );
+        const registration = await registerPendingEnrollments(electionId, { limit: FIRST_BATCH_ON_CHAIN });
+        enrollment = { ...summary, registration };
       }
     }
 
     return NextResponse.json({
       success: true,
-      electionId,
       total: records.length,
-      upserted,
-      updated,
-      skipped: records.length - validVoters.length - errors.length,
-      errors: errors.slice(0, 50),
-      hasMoreErrors: errors.length > 50,
-      ipfsCid,
-      ipfsUrl: getIPFSUrl(ipfsCid),
-      registration: {
-        registered,
-        linked,
-        failed: regFailed,
-        failedVoters: regErrors,
-        invitesSent: 0,
+      added,
+      unchanged: skipped,
+      casesOpened,
+      caseBreakdown: {
+        missing: cases.filter((c) => c.kind === "missing").length,
+        duplicate: cases.filter((c) => c.kind === "duplicate").length,
       },
+      caseSamples: cases.slice(0, 20).map((c) => ({
+        row: c.rowNumber,
+        kind: c.kind,
+        voterId: c.newRow.voterId || "—",
+        reason: c.reasons.join(" "),
+      })),
+      ignoredColumns: unknown,
+      ipfsCid,
+      ipfsUrl: ipfsCid ? getIPFSUrl(ipfsCid) : "",
+      enrollment,
+      electionId: electionId || null,
     });
   } catch (err) {
     console.error("[upload-csv] FATAL:", err);

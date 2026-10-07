@@ -21,7 +21,7 @@
  */
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/db";
-import Voter from "@/lib/models/Voter";
+import Enrollment from "@/lib/models/Enrollment";
 import Election from "@/lib/models/Election";
 import { relayCastVote } from "@/lib/relay";
 import { preflightCheck } from "@/lib/preflightCache";
@@ -107,8 +107,8 @@ export async function POST(req) {
       );
     }
 
-    // ── Verify the nullifier belongs to a registered voter in this election ───
-    const voter = await Voter.findOne({
+    // ── Verify the nullifier belongs to a registered enrollment in this election ─
+    const voter = await Enrollment.findOne({
       nullifierHash,
       electionId: eid,
     }).lean();

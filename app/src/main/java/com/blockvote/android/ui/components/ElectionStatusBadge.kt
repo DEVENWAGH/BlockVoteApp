@@ -13,22 +13,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.blockvote.android.domain.model.ElectionStatus
+import com.blockvote.android.domain.model.label
 import com.blockvote.android.ui.theme.CyberAmber
 import com.blockvote.android.ui.theme.EmeraldGreen
 
+/** Same words as the web: Not open / Voting open / Closed. */
 @Composable
 fun ElectionStatusBadge(
     status: ElectionStatus,
     modifier: Modifier = Modifier
 ) {
-    val (backgroundColor, textColor, label) = when (status) {
-        ElectionStatus.LIVE -> Triple(EmeraldGreen.copy(alpha = 0.2f), EmeraldGreen, "LIVE")
-        ElectionStatus.UPCOMING -> Triple(CyberAmber.copy(alpha = 0.2f), CyberAmber, "UPCOMING")
-        ElectionStatus.CLOSED -> Triple(
-            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
-            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-            "CLOSED"
-        )
+    val label = status.label()
+    val (backgroundColor, textColor) = when (status) {
+        ElectionStatus.LIVE -> EmeraldGreen.copy(alpha = 0.2f) to EmeraldGreen
+        ElectionStatus.UPCOMING -> CyberAmber.copy(alpha = 0.2f) to CyberAmber
+        ElectionStatus.CLOSED ->
+            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f) to
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
     }
 
     Box(

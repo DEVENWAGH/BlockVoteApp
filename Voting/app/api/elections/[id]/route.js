@@ -5,6 +5,8 @@ import Election from '@/lib/models/Election';
 import Candidate from '@/lib/models/Candidate';
 import Admin from '@/lib/models/Admin';
 import { getVotingWindowStatus } from '@/lib/votingWindow';
+import { phaseLabel } from '@/lib/voterMessages';
+import { LEVEL_SHORT } from '@/lib/seats';
 
 import mongoose from 'mongoose';
 
@@ -34,6 +36,9 @@ export async function GET(request, { params }) {
       success: true,
       data: {
         ...election,
+        level: election.level || 'general',
+        levelLabel: LEVEL_SHORT[election.level || 'general'],
+        status: phaseLabel(election.phase),
         orgName: admin?.name || '',
         canonicalVoteUrl: admin?.name
           ? `/org/${encodeURIComponent(admin.name)}/election/${encodeURIComponent(

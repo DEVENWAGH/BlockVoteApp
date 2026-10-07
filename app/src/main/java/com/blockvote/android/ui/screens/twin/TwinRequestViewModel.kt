@@ -13,7 +13,7 @@ import javax.inject.Inject
 
 data class TwinRequestUiState(
     val electionIdInput: String = "",
-    val emailInput: String = "",
+    val voterIdInput: String = "",
     val notesInput: String = "",
     val nullifierHash: String? = null,
     val twinStatus: String? = null,
@@ -35,8 +35,9 @@ class TwinRequestViewModel @Inject constructor(
         _state.update { it.copy(electionIdInput = value.trim(), error = null) }
     }
 
-    fun onEmailChange(value: String) {
-        _state.update { it.copy(emailInput = value, error = null) }
+    fun onVoterIdChange(value: String) {
+        val clean = value.uppercase().filter { ch -> ch.isLetterOrDigit() }.take(20)
+        _state.update { it.copy(voterIdInput = clean, error = null) }
     }
 
     fun onNotesChange(value: String) {
@@ -45,24 +46,24 @@ class TwinRequestViewModel @Inject constructor(
 
     fun submitRequest() {
         val electionId = _state.value.electionIdInput
-        val email = _state.value.emailInput.trim()
+        val voterId = _state.value.voterIdInput.trim()
         if (electionId.isBlank()) {
-            _state.update { it.copy(error = "Enter your election ID") }
+            _state.update { it.copy(error = "Enter the election ID from your invite") }
             return
         }
-        if (email.isBlank() || !email.contains("@")) {
-            _state.update { it.copy(error = "Enter a valid registered email") }
+        if (voterId.length < 6) {
+            _state.update { it.copy(error = "Enter the voter ID printed on your voter card") }
             return
         }
 
         viewModelScope.launch {
             _state.update { it.copy(loading = true, error = null, successMessage = null) }
-            repository.lookupVoter(email, electionId)
+            repository.lookupVoter(voterId, electionId)
                 .onSuccess { voter ->
                     repository.submitTwinRequest(
                         nullifierHash = voter.nullifierHash,
                         electionId = electionId,
-                        email = email,
+                        voterId = voter.voterId,
                         notes = _state.value.notesInput.trim()
                     ).onSuccess { message ->
                         repository.getTwinVerificationStatus(voter.nullifierHash)
@@ -96,7 +97,7 @@ class TwinRequestViewModel @Inject constructor(
                 }
                 .onFailure { e ->
                     _state.update {
-                        it.copy(loading = false, error = e.message ?: "Voter not found for this election")
+                        it.copy(loading = false, error = e.message ?: "This voter ID is not on the list. Check the ID or ask the booth officer.")
                     }
                 }
         }

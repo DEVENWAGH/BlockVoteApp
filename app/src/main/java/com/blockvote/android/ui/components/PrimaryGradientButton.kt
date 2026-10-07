@@ -47,7 +47,7 @@ fun PrimaryGradientButton(
 
     Box(
         modifier = modifier
-            .graphicsLayer(scaleX = scale, scaleY = scale)
+            .graphicsLayer(scaleX = scale, scaleY = scale, alpha = if (enabled) 1f else 0.5f)
             .clip(RoundedCornerShape(12.dp))
             .background(gradientBrush)
             .clickable(

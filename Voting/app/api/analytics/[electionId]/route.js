@@ -12,6 +12,7 @@ import VoteActivity from '@/lib/models/VoteActivity';
 import Election from '@/lib/models/Election';
 import Candidate from '@/lib/models/Candidate';
 import Voter from '@/lib/models/Voter';
+import Enrollment from '@/lib/models/Enrollment';
 import BiometricHash from '@/lib/models/BiometricHash';
 
 /** Ballots in the delayed window before any candidate share is published. */
@@ -182,11 +183,22 @@ export async function GET(request, { params }) {
     });
     const votesPerMinute = (recentCount / 10).toFixed(2);
 
-    // 8. Demographics (aggregated from Voter collection — NOT linked to individual votes)
+    // 8. Demographics (aggregated from the enrolled roll — NOT linked to individual votes)
     // PRIVACY: Demographics are computed from the voter ROSTER, not correlated
     // with individual vote records. This means we know "40% of registered voters
     // are female" but NOT "this specific vote was cast by a female voter."
-    const registeredVoters = await Voter.find({ electionId: eid, status: 'registered' }).lean();
+    // Home place comes from the master roll; the booth a vote was cast at is
+    // reported separately (boothBuckets) and never joined to candidates.
+    const enrollments = await Enrollment.find({ electionId: eid, status: 'registered' })
+      .select('voterId nullifierHash constituencyCode votedAtBoothName votedAtBoothCode votesCast')
+      .lean();
+    const rollPeople = enrollments.length
+      ? await Voter.find({ voterId: { $in: enrollments.map((e) => e.voterId) } })
+          .select('voterId age gender state district city village localityType cityTier')
+          .lean()
+      : [];
+    const personById = new Map(rollPeople.map((p) => [p.voterId, p]));
+    const registeredVoters = enrollments.map((e) => ({ ...(personById.get(e.voterId) || {}), nullifierHash: e.nullifierHash, constituencyCode: e.constituencyCode }));
     const biometrics = await BiometricHash.find({
       nullifierHash: { $in: registeredVoters.map(v => v.nullifierHash).filter(Boolean) }
     }).lean();
@@ -272,23 +284,33 @@ export async function GET(request, { params }) {
 
     // Re-vote stats (V3 feature)
     const revoteCount = await VoteActivity.countDocuments({ electionId: eid, isRevote: true });
-    const regionRaw = countBuckets(registeredVoters, (v) => v.region || v.state);
-    const stateRaw = countBuckets(registeredVoters, (v) => v.state || v.region);
+    const regionRaw = countBuckets(registeredVoters, (v) => v.state);
+    const stateRaw = countBuckets(registeredVoters, (v) => v.state);
+    const districtRaw = countBuckets(registeredVoters, (v) => v.district);
     const cityRaw = countBuckets(registeredVoters, (v) => v.city);
     const villageRaw = countBuckets(registeredVoters, (v) => v.village);
     const localityRaw = countBuckets(registeredVoters, (v) => v.localityType);
     const cityTierRaw = countBuckets(registeredVoters, (v) => v.cityTier);
+    const seatRaw = countBuckets(registeredVoters, (v) => v.constituencyCode);
+    // Where ballots were cast (booth), counted only for people who voted.
+    const boothRaw = countBuckets(
+      enrollments.filter((e) => (e.votesCast || 0) > 0 && e.votedAtBoothName),
+      (e) => e.votedAtBoothName,
+    );
     const regionPublished = publishBuckets(regionRaw);
     const statePublished = publishBuckets(stateRaw);
+    const districtPublished = publishBuckets(districtRaw);
     const cityPublished = publishBuckets(cityRaw);
     const villagePublished = publishBuckets(villageRaw);
     const localityPublished = publishBuckets(localityRaw);
     const cityTierPublished = publishBuckets(cityTierRaw);
+    const seatPublished = publishBuckets(seatRaw);
+    const boothPublished = publishBuckets(boothRaw);
     const agePublished = publishBuckets(ageGroups);
     const genderPublished = publishBuckets(rosterGenders);
 
     const locationShared = registeredVoters.filter((voter) => (
-      voter.state || voter.city || voter.village || voter.region
+      voter.state || voter.city || voter.village
     )).length;
 
     const publishedPeak = publishedHourly.length > 0
@@ -331,8 +353,11 @@ export async function GET(request, { params }) {
         cityTierBuckets: cityTierPublished.buckets,
         regionBuckets: regionPublished.buckets,
         stateBuckets: statePublished.buckets,
+        districtBuckets: districtPublished.buckets,
         cityBuckets: cityPublished.buckets,
         villageBuckets: villagePublished.buckets,
+        seatBuckets: seatPublished.buckets,
+        boothBuckets: boothPublished.buckets,
         hiddenPlaceGroups: regionPublished.hiddenGroups + cityPublished.hiddenGroups + villagePublished.hiddenGroups,
       },
     };
@@ -371,8 +396,11 @@ export async function GET(request, { params }) {
           cityTierBuckets: cityTierPublished.buckets,
           regionBuckets: regionPublished.buckets,
           stateBuckets: statePublished.buckets,
+          districtBuckets: districtPublished.buckets,
           cityBuckets: cityPublished.buckets,
           villageBuckets: villagePublished.buckets,
+          seatBuckets: seatPublished.buckets,
+          boothBuckets: boothPublished.buckets,
           hiddenPlaceGroups: regionPublished.hiddenGroups + cityPublished.hiddenGroups + villagePublished.hiddenGroups,
         },
       },

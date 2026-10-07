@@ -20,7 +20,9 @@ data class ElectionDetailDto(
     val canonicalVoteUrl: String? = null,
     val txHash: String? = null,
     val blockNumber: Int? = null,
-    val votingWindow: VotingWindowDto? = null
+    val votingWindow: VotingWindowDto? = null,
+    val level: String? = null,
+    val status: String? = null
 )
 
 data class VotingWindowDto(
@@ -107,17 +109,67 @@ data class CandidateDto(
     val id: Int = 0,
     val name: String = "",
     val party: String? = null,
+    val partyCode: String? = null,
     val symbol: String? = null,
     val manifesto: String? = null,
     val photoUrl: String? = null,
+    val constituencyCode: String? = null,
+    val constituencyName: String? = null,
     val voteCount: Int? = null
+)
+
+data class VoterSlipDto(
+    val voterId: String? = null,
+    val maskedVoterId: String? = null,
+    val name: String? = null,
+    val maskedEmail: String? = null,
+    val homePlace: String? = null,
+    val village: String? = null,
+    val city: String? = null,
+    val district: String? = null,
+    val state: String? = null,
+    val ward: String? = null,
+    val homePollingStation: String? = null,
+    val constituencyCode: String? = null,
+    val constituencyName: String? = null,
+    val level: String? = null,
+    val hasVoted: Boolean? = null,
+    val stationVoteFinal: Boolean? = null
 )
 
 data class VoterLookupResponse(
     val success: Boolean? = null,
     val memberId: String? = null,
     val nullifierHash: String? = null,
-    val error: String? = null
+    val status: String? = null,
+    val slip: VoterSlipDto? = null,
+    val error: String? = null,
+    val code: String? = null
+)
+
+data class BallotElectionDto(
+    val electionId: String? = null,
+    val title: String? = null,
+    val level: String? = null,
+    val phase: Int? = null,
+    val status: String? = null,
+    val open: Boolean? = null
+)
+
+data class BallotSeatDto(
+    val code: String? = null,
+    val name: String? = null,
+    val homePlace: String? = null
+)
+
+data class BallotResponse(
+    val success: Boolean? = null,
+    val election: BallotElectionDto? = null,
+    val seat: BallotSeatDto? = null,
+    val candidates: List<CandidateDto> = emptyList(),
+    val message: String? = null,
+    val error: String? = null,
+    val code: String? = null
 )
 
 data class BiometricVerifyRequest(
@@ -134,19 +186,22 @@ data class BiometricVerifyResponse(
 )
 
 data class SendOtpRequest(
-    val email: String,
+    val voterId: String,
     val electionId: String
 )
 
 data class SendOtpResponse(
     val success: Boolean? = null,
     val message: String? = null,
+    /** Masked email the code went to, e.g. "r•••@gmail.com". */
+    val sentTo: String? = null,
     val expiresAt: String? = null,
-    val error: String? = null
+    val error: String? = null,
+    val code: String? = null
 )
 
 data class VerifyOtpRequest(
-    val email: String,
+    val voterId: String,
     val otp: String,
     val electionId: String,
     val candidateId: Int,
@@ -157,11 +212,14 @@ data class VerifyOtpResponse(
     val success: Boolean? = null,
     val message: String? = null,
     val txHash: String? = null,
+    val receiptCode: String? = null,
     val verifyUrl: String? = null,
+    val channel: String? = null,
     val isRevote: Boolean? = null,
     val isFinal: Boolean? = null,
     val votesRemaining: Int? = null,
-    val error: String? = null
+    val error: String? = null,
+    val code: String? = null
 )
 
 data class AuditVerifyResponse(

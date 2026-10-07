@@ -9,6 +9,11 @@ import { verifyGuardianAction } from "@/lib/guardianAuth";
 
 const COLLECTIONS = [
   "voters",
+  "enrollments",
+  "votercases",
+  "parties",
+  "constituencies",
+  "booths",
   "elections",
   "voteactivities",
   "candidates",

@@ -251,9 +251,9 @@ private fun ElectionInsightContent(data: ElectionInsightUi) {
 @Composable
 private fun PhaseBadge(phase: Int) {
     val (label, color) = when (phase) {
-        2 -> "Completed" to Color(0xFF10B981)
-        1 -> "Voting Active" to Color(0xFFF59E0B)
-        else -> "Registration" to ElectricCyan
+        2 -> "Closed" to Color(0xFF10B981)
+        1 -> "Voting open" to Color(0xFFF59E0B)
+        else -> "Not open" to ElectricCyan
     }
     Surface(
         color = color.copy(alpha = 0.15f),
