@@ -43,11 +43,13 @@ if (-not $devices) {
     Write-Host "==> Waiting for emulator boot..." -ForegroundColor Yellow
     & $adb wait-for-device
     $deadline = (Get-Date).AddMinutes(3)
+    $bootStr = ""
     do {
         Start-Sleep -Seconds 2
         $boot = & $adb shell getprop sys.boot_completed 2>$null
-    } while ($boot.Trim() -ne "1" -and (Get-Date) -lt $deadline)
-    if ($boot.Trim() -ne "1") { throw "Emulator boot timed out." }
+        $bootStr = if ($boot) { ($boot -join '').Trim() } else { '' }
+    } while ($bootStr -ne "1" -and (Get-Date) -lt $deadline)
+    if ($bootStr -ne "1") { throw "Emulator boot timed out." }
 }
 
 Write-Host "==> Building & installing localDebug (apiBaseUrl=http://10.0.2.2:3000/)" -ForegroundColor Green

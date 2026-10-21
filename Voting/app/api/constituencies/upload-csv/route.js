@@ -35,6 +35,7 @@ const LEVEL_ALIASES = {
   loksabha: 'loksabha', pc: 'loksabha', mp: 'loksabha', parliament: 'loksabha', parliamentary: 'loksabha',
 };
 
+import mongoose from 'mongoose';
 import { getAdminOrGuardian } from '@/lib/adminSession';
 
 export async function POST(req) {
@@ -91,6 +92,9 @@ export async function POST(req) {
         return;
       }
       seen.add(code);
+      const validAdminObjectId = (authResult.adminId && mongoose.Types.ObjectId.isValid(authResult.adminId))
+        ? authResult.adminId
+        : null;
       ops.push({
         updateOne: {
           filter: { code },
@@ -105,7 +109,7 @@ export async function POST(req) {
               ward: row.ward || '',
               parentCode: normalizeCode(row.parentCode || ''),
             },
-            $setOnInsert: { code, createdBy: session.user.adminId },
+            $setOnInsert: { code, createdBy: validAdminObjectId },
           },
           upsert: true,
         },

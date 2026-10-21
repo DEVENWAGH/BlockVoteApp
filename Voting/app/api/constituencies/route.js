@@ -9,6 +9,7 @@ import Constituency, { SEAT_LEVELS } from '@/lib/models/Constituency';
 import { auth } from '@/auth';
 import { normalizeCode } from '@/lib/seats';
 
+import mongoose from 'mongoose';
 import { getAdminOrGuardian } from '@/lib/adminSession';
 
 export async function GET(req) {
@@ -75,6 +76,9 @@ export async function POST(req) {
     if (await Constituency.findOne({ code }).lean()) {
       return NextResponse.json({ error: `Seat ${code} already exists.` }, { status: 409 });
     }
+    const validAdminObjectId = (authResult.adminId && mongoose.Types.ObjectId.isValid(authResult.adminId))
+      ? authResult.adminId
+      : null;
     const seat = await Constituency.create({
       code,
       name,
@@ -85,7 +89,7 @@ export async function POST(req) {
       village: String(body.village || '').trim(),
       ward: String(body.ward || '').trim(),
       parentCode: normalizeCode(body.parentCode || ''),
-      createdBy: session.user.adminId,
+      createdBy: validAdminObjectId,
     });
     return NextResponse.json({ success: true, seat }, { status: 201 });
   } catch (err) {

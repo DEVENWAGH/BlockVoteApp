@@ -109,7 +109,7 @@ export async function POST(req, { params }) {
       return NextResponse.json({ preview: true, label: describeScope(scope), matched, alreadyEnrolled });
     }
 
-    const result = await enrollVotersByScope({ election, scope, adminId: session.user.adminId });
+    const result = await enrollVotersByScope({ election, scope, adminId: authResult.adminId });
     await Election.updateOne(
       { electionId: election.electionId },
       {

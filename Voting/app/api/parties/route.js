@@ -24,6 +24,7 @@ export async function GET(req) {
   }
 }
 
+import mongoose from 'mongoose';
 import { getAdminOrGuardian } from '@/lib/adminSession';
 
 export async function POST(req) {
@@ -33,7 +34,7 @@ export async function POST(req) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { code, name, symbol, manifesto = '', allowMultiplePerSeat = false } = await req.json();
+    const { code, name, symbol, color = '', manifesto = '', allowMultiplePerSeat = false } = await req.json();
     const cleanCode = normalizeCode(code);
     const cleanName = String(name || '').trim();
 
@@ -55,6 +56,10 @@ export async function POST(req) {
       return NextResponse.json({ error: `A party with code ${cleanCode} already exists.` }, { status: 409 });
     }
 
+    const validAdminObjectId = (authResult.adminId && mongoose.Types.ObjectId.isValid(authResult.adminId))
+      ? authResult.adminId
+      : null;
+
     const party = await Party.create({
       code: cleanCode,
       name: cleanName,
@@ -62,7 +67,7 @@ export async function POST(req) {
       color: String(color || '').trim().slice(0, 16),
       manifesto: String(manifesto || '').trim(),
       allowMultiplePerSeat: Boolean(allowMultiplePerSeat),
-      createdBy: session.user.adminId,
+      createdBy: validAdminObjectId,
     });
 
     return NextResponse.json({ success: true, party: serializeParty(party.toObject(), origin) }, { status: 201 });

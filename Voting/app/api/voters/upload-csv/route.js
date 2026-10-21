@@ -44,6 +44,7 @@ function snapshot(voter) {
   return rest;
 }
 
+import mongoose from 'mongoose';
 import { getAdminOrGuardian } from '@/lib/adminSession';
 
 export async function POST(req) {
@@ -52,6 +53,10 @@ export async function POST(req) {
     if (!authResult?.ok) {
       return NextResponse.json({ error: "Unauthorized — Guardian or Admin access required" }, { status: 401 });
     }
+
+    const validAdminObjectId = (authResult.adminId && mongoose.Types.ObjectId.isValid(authResult.adminId))
+      ? authResult.adminId
+      : null;
 
     await connectDB();
 
@@ -70,7 +75,7 @@ export async function POST(req) {
       if (!election) {
         return NextResponse.json({ error: "Election not found" }, { status: 404 });
       }
-      if (election.createdBy && String(election.createdBy) !== String(session.user.adminId)) {
+      if (election.createdBy && !authResult.isGuardian && String(election.createdBy) !== String(authResult.adminId)) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
     }
@@ -187,7 +192,7 @@ export async function POST(req) {
         existingSnapshot: snapshot(result.existing),
         sourceFile,
         rowNumber,
-        createdBy: session.user.adminId,
+        createdBy: validAdminObjectId,
       });
     }
 
@@ -202,7 +207,7 @@ export async function POST(req) {
             $setOnInsert: {
               ...v,
               source: "csv",
-              createdBy: session.user.adminId,
+              createdBy: validAdminObjectId,
             },
             $set: { lastImportedAt: now },
           },
@@ -257,7 +262,7 @@ export async function POST(req) {
         const summary = await enrollVotersByScope({
           election,
           scope: { voterIds },
-          adminId: session.user.adminId,
+          adminId: authResult.adminId,
         });
         await Election.updateOne(
           { electionId },

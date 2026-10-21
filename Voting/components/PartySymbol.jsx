@@ -14,7 +14,9 @@ export default function PartySymbol({
   const sizeClasses = {
     sm: 'w-8 h-8 text-sm',
     md: 'w-10 h-10 text-base',
-    lg: 'w-12 h-12 text-xl',
+    lg: 'w-14 h-14 text-xl',
+    xl: 'w-20 h-20 text-2xl',
+    '2xl': 'w-24 h-24 text-3xl',
   };
   const box = sizeClasses[size] || sizeClasses.md;
 
@@ -24,7 +26,7 @@ export default function PartySymbol({
       <img
         src={src}
         alt={name ? `${name} party symbol` : 'Party symbol'}
-        className={`${box} rounded-full object-cover border border-hairline shrink-0 ${className}`}
+        className={`${box} rounded-2xl object-contain p-1 bg-white border border-hairline shrink-0 shadow-sm ${className}`}
       />
     );
   }

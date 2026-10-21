@@ -30,17 +30,17 @@ try {
 Push-Location $Voting
 try {
     if (-not (Test-Path (Join-Path $Voting "node_modules"))) {
-        Write-Host "==> Installing npm deps (first run)..." -ForegroundColor Yellow
-        yarn install
+        Write-Host "==> Installing deps (first run)..." -ForegroundColor Yellow
+        bun install
     }
 
     if (-not (Test-Path (Join-Path $Voting ".env.development"))) {
-        Write-Host "==> Bootstrapping isolated env profiles (yarn env:init)..." -ForegroundColor Yellow
-        yarn env:init
+        Write-Host "==> Bootstrapping isolated env profiles (bun run env:init)..." -ForegroundColor Yellow
+        bun run env:init
     }
 
-    Write-Host "==> Starting yarn dev (Hardhat + contract deploy + Next.js)..." -ForegroundColor Green
-    yarn dev
+    Write-Host "==> Starting bun run dev (Hardhat + contract deploy + Next.js)..." -ForegroundColor Green
+    bun run dev
 }
 finally {
     Pop-Location
